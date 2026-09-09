@@ -1,0 +1,89 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: API specification generated from the corresponding Functional Requirements (FR) in the CAB System SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Driver Management
+paths:
+  /drivers/me:
+    get:
+      tags: [Driver Management]
+      summary: Get current driver profile
+      operationId: getMyDriverProfile
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Driver profile returned}
+    patch:
+      tags: [Driver Management]
+      summary: Update current driver profile
+      operationId: updateMyDriverProfile
+      x-functional-requirement: FR-DM-01
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object}
+      responses:
+        '200': {description: Driver profile updated}
+  /drivers/me/vehicles:
+    get:
+      tags: [Driver Management]
+      summary: List vehicles of current driver
+      operationId: getMyVehicles
+      x-functional-requirement: FR-DM-02
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Vehicle list returned}
+    post:
+      tags: [Driver Management]
+      summary: Add vehicle information
+      operationId: addVehicle
+      x-functional-requirement: FR-DM-02
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plateNumber, vehicleType]
+              properties:
+                plateNumber: {type: string}
+                vehicleType: {type: string}
+                model: {type: string}
+      responses:
+        '201': {description: Vehicle created}
+  /drivers/me/availability:
+    patch:
+      tags: [Driver Management]
+      summary: Update driver availability
+      operationId: updateDriverAvailability
+      x-functional-requirement: FR-DM-03
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: {type: string, enum: [AVAILABLE, UNAVAILABLE]}
+      responses:
+        '200': {description: Availability updated}
+  /drivers:
+    get:
+      tags: [Driver Management]
+      summary: Search and manage driver information for operations
+      operationId: listDrivers
+      x-functional-requirement: FR-DM-04
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Driver list returned}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

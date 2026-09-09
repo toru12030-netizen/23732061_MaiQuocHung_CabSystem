@@ -1,0 +1,79 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: API specification generated from the corresponding Functional Requirements (FR) in the CAB System SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Operation Management
+paths:
+  /operations/customers:
+    get:
+      tags: [Operation Management]
+      summary: Manage and search customers
+      operationId: operationListCustomers
+      x-functional-requirement: FR-OM-01
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Customer list returned}
+  /operations/drivers:
+    get:
+      tags: [Operation Management]
+      summary: Manage and search drivers
+      operationId: operationListDrivers
+      x-functional-requirements: [FR-OM-02, FR-OM-05]
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Driver list returned}
+  /operations/vehicles:
+    get:
+      tags: [Operation Management]
+      summary: Manage vehicles
+      operationId: operationListVehicles
+      x-functional-requirement: FR-OM-03
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Vehicle list returned}
+  /operations/trips/active:
+    get:
+      tags: [Operation Management]
+      summary: Monitor active trips
+      operationId: getActiveTrips
+      x-functional-requirement: FR-OM-04
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Active trips returned}
+  /operations/trips/{tripId}/exceptions:
+    post:
+      tags: [Operation Management]
+      summary: Handle a trip exception
+      operationId: handleTripException
+      x-functional-requirement: FR-OM-06
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: tripId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: {type: string}
+                note: {type: string}
+      responses:
+        '200': {description: Exception handled}
+  /operations/transactions:
+    get:
+      tags: [Operation Management]
+      summary: Search transaction history
+      operationId: searchTransactionHistory
+      x-functional-requirement: FR-OM-07
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Transaction history returned}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

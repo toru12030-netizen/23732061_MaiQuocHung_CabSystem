@@ -1,0 +1,55 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: API specification generated from the corresponding Functional Requirements (FR) in the CAB System SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Notification Management
+paths:
+  /notifications:
+    get:
+      tags: [Notification Management]
+      summary: Get notifications for current user
+      operationId: listNotifications
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: unreadOnly, in: query, schema: {type: boolean}}
+      responses:
+        '200': {description: Notification list returned}
+  /notifications/{notificationId}/read:
+    patch:
+      tags: [Notification Management]
+      summary: Mark a notification as read
+      operationId: markNotificationRead
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: notificationId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Notification marked as read}
+  /notifications/events:
+    post:
+      tags: [Notification Management]
+      summary: Publish a business event for notification delivery
+      operationId: publishNotificationEvent
+      x-functional-requirements: [FR-NT-01, FR-NT-02, FR-NT-03, FR-NT-04, FR-NT-05, FR-NT-06]
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventType, recipientId]
+              properties:
+                eventType:
+                  type: string
+                  enum: [BOOKING_RECEIVED, DRIVER_ACCEPTED, DRIVER_ARRIVED, TRIP_COMPLETED, PAYMENT_RESULT, NEW_TRIP_REQUEST]
+                recipientId: {type: string}
+                payload: {type: object}
+      responses:
+        '202': {description: Notification event accepted}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

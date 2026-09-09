@@ -1,0 +1,71 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: API specification generated from the corresponding Functional Requirements (FR) in the CAB System SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Customer Management
+paths:
+  /customers/register:
+    post:
+      tags: [Customer Management]
+      summary: Register a customer account
+      operationId: registerCustomer
+      x-functional-requirement: FR-CM-01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, phone, password]
+              properties:
+                fullName: {type: string}
+                phone: {type: string}
+                password: {type: string, format: password}
+      responses:
+        '201': {description: Customer account created}
+        '400': {description: Invalid request}
+  /customers/me:
+    get:
+      tags: [Customer Management]
+      summary: Get current customer profile
+      operationId: getMyCustomerProfile
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Customer profile returned}
+    patch:
+      tags: [Customer Management]
+      summary: Update current customer profile
+      operationId: updateMyCustomerProfile
+      x-functional-requirement: FR-CM-03
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName: {type: string}
+                email: {type: string, format: email}
+                avatarUrl: {type: string, format: uri}
+      responses:
+        '200': {description: Profile updated}
+  /customers/me/trips:
+    get:
+      tags: [Customer Management]
+      summary: View customer trip history
+      operationId: getCustomerTripHistory
+      x-functional-requirement: FR-CM-04
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        '200': {description: Trip history returned}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

@@ -1,0 +1,66 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: API specification generated from the corresponding Functional Requirements (FR) in the CAB System SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Authentication & Access Control
+paths:
+  /auth/login:
+    post:
+      tags: [Authentication & Access Control]
+      summary: Authenticate a user and issue access tokens
+      operationId: login
+      x-functional-requirement: FR-AC-01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier: {type: string}
+                password: {type: string, format: password}
+      responses:
+        '200': {description: Authentication successful}
+        '401': {description: Invalid credentials}
+  /auth/refresh:
+    post:
+      tags: [Authentication & Access Control]
+      summary: Refresh access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: {type: string}
+      responses:
+        '200': {description: Token refreshed}
+  /access/roles:
+    get:
+      tags: [Authentication & Access Control]
+      summary: Get roles and permissions for access control
+      operationId: listRolesAndPermissions
+      x-functional-requirements: [FR-AC-02, FR-AC-03]
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Roles and permissions returned}
+  /audit-logs:
+    get:
+      tags: [Authentication & Access Control]
+      summary: Search important user operation audit logs
+      operationId: getAuditLogs
+      x-functional-requirement: FR-AC-04
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Audit logs returned}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

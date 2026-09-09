@@ -1,0 +1,69 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: API specification generated from the corresponding Functional Requirements (FR) in the CAB System SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Fare & Payment Management
+paths:
+  /trips/{tripId}/fare:
+    get:
+      tags: [Fare & Payment Management]
+      summary: Get calculated fare for a completed trip
+      operationId: getTripFare
+      x-functional-requirement: FR-PM-01
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: tripId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Fare returned}
+        '409': {description: Trip is not completed}
+  /trips/{tripId}/payments/cash:
+    post:
+      tags: [Fare & Payment Management]
+      summary: Record cash payment
+      operationId: recordCashPayment
+      x-functional-requirements: [FR-PM-02, FR-PM-04]
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: tripId, in: path, required: true, schema: {type: string}}
+      responses:
+        '201': {description: Cash payment recorded}
+  /trips/{tripId}/payments/electronic:
+    post:
+      tags: [Fare & Payment Management]
+      summary: Initiate electronic payment
+      operationId: initiateElectronicPayment
+      x-functional-requirements: [FR-PM-03, FR-PM-04, FR-PM-05]
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: tripId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider]
+              properties:
+                provider: {type: string}
+                returnUrl: {type: string, format: uri}
+      responses:
+        '202': {description: Payment initiated}
+        '502': {description: Payment provider error}
+  /payments/{paymentId}:
+    get:
+      tags: [Fare & Payment Management]
+      summary: Get payment transaction status
+      operationId: getPayment
+      x-functional-requirements: [FR-PM-04, FR-PM-06]
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: paymentId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Payment returned}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

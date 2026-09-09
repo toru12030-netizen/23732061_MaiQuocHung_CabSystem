@@ -1,0 +1,66 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: API specification generated from the corresponding Functional Requirements (FR) in the CAB System SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Driver Matching & Assignment
+paths:
+  /bookings/{bookingId}/matching:
+    post:
+      tags: [Driver Matching & Assignment]
+      summary: Start or retry driver matching for a booking
+      operationId: startDriverMatching
+      x-functional-requirements: [FR-MA-01, FR-MA-02, FR-MA-03, FR-MA-05]
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: bookingId, in: path, required: true, schema: {type: string}}
+      responses:
+        '202': {description: Matching process started}
+        '409': {description: Booking already assigned or not eligible}
+  /driver-trip-requests:
+    get:
+      tags: [Driver Matching & Assignment]
+      summary: Get pending trip requests for current driver
+      operationId: getPendingTripRequests
+      x-functional-requirement: FR-MA-03
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Pending trip requests returned}
+  /driver-trip-requests/{requestId}/response:
+    post:
+      tags: [Driver Matching & Assignment]
+      summary: Accept or reject a trip request
+      operationId: respondToTripRequest
+      x-functional-requirement: FR-MA-04
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: requestId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [response]
+              properties:
+                response: {type: string, enum: [ACCEPT, REJECT]}
+      responses:
+        '200': {description: Driver response recorded}
+        '409': {description: Request already expired or processed}
+  /bookings/{bookingId}/matching-result:
+    get:
+      tags: [Driver Matching & Assignment]
+      summary: Get driver matching result
+      operationId: getMatchingResult
+      x-functional-requirement: FR-MA-06
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: bookingId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Matching result returned}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

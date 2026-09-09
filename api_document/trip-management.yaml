@@ -1,0 +1,71 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: API specification generated from the corresponding Functional Requirements (FR) in the CAB System SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Trip Management
+paths:
+  /trips/{tripId}:
+    get:
+      tags: [Trip Management]
+      summary: Get trip details and current status
+      operationId: getTrip
+      x-functional-requirements: [FR-TR-01, FR-TR-05]
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: tripId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Trip returned}
+        '404': {description: Trip not found}
+  /trips/{tripId}/status:
+    patch:
+      tags: [Trip Management]
+      summary: Update trip status by assigned driver
+      operationId: updateTripStatus
+      x-functional-requirements: [FR-TR-02, FR-TR-03]
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: tripId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [ASSIGNED, ARRIVED_AT_PICKUP, PICKED_UP, IN_PROGRESS, COMPLETED]
+      responses:
+        '200': {description: Trip status updated}
+        '403': {description: Driver is not assigned to this trip}
+        '409': {description: Invalid status transition}
+  /trips/{tripId}/driver-location:
+    post:
+      tags: [Trip Management]
+      summary: Record current driver location during a trip
+      operationId: updateTripDriverLocation
+      x-functional-requirement: FR-TR-04
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: tripId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude: {type: number, format: double}
+                longitude: {type: number, format: double}
+                recordedAt: {type: string, format: date-time}
+      responses:
+        '202': {description: Driver location recorded}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

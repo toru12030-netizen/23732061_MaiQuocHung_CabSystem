@@ -1,0 +1,58 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: API specification generated from the corresponding Functional Requirements (FR) in the CAB System SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Reporting & Monitoring
+paths:
+  /reports/trips:
+    get:
+      tags: [Reporting & Monitoring]
+      summary: Report number of trips
+      operationId: getTripReport
+      x-functional-requirement: FR-RP-01
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Trip report returned}
+  /reports/revenue:
+    get:
+      tags: [Reporting & Monitoring]
+      summary: Report revenue
+      operationId: getRevenueReport
+      x-functional-requirement: FR-RP-02
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Revenue report returned}
+  /reports/completion-rate:
+    get:
+      tags: [Reporting & Monitoring]
+      summary: Report trip completion rate
+      operationId: getCompletionRateReport
+      x-functional-requirement: FR-RP-03
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Completion rate returned}
+  /reports/cancellation-rate:
+    get:
+      tags: [Reporting & Monitoring]
+      summary: Report trip cancellation rate
+      operationId: getCancellationRateReport
+      x-functional-requirement: FR-RP-04
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Cancellation rate returned}
+  /reports/driver-performance:
+    get:
+      tags: [Reporting & Monitoring]
+      summary: Report driver performance
+      operationId: getDriverPerformanceReport
+      x-functional-requirement: FR-RP-05
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Driver performance returned}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

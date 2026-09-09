@@ -1,0 +1,55 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: API specification generated from the corresponding Functional Requirements (FR) in the CAB System SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Rating & Trip History
+paths:
+  /customers/me/trips:
+    get:
+      tags: [Rating & Trip History]
+      summary: Get customer trip history
+      operationId: getTripHistory
+      x-functional-requirement: FR-RH-01
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Trip history returned}
+  /trips/{tripId}/payment:
+    get:
+      tags: [Rating & Trip History]
+      summary: Get payment information of a trip
+      operationId: getTripPaymentInformation
+      x-functional-requirement: FR-RH-02
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: tripId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Payment information returned}
+  /trips/{tripId}/rating:
+    post:
+      tags: [Rating & Trip History]
+      summary: Rate the assigned driver after trip completion
+      operationId: createDriverRating
+      x-functional-requirement: FR-RH-03
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: tripId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [score]
+              properties:
+                score: {type: integer, minimum: 1, maximum: 5}
+                comment: {type: string, maxLength: 1000}
+      responses:
+        '201': {description: Rating created}
+        '409': {description: Trip not completed or already rated}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
