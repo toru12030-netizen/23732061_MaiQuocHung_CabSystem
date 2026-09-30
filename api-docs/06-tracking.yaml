@@ -1,0 +1,58 @@
+openapi: 3.0.3
+info:
+  title: CAB Tracking API
+  version: 1.0.0
+  description: Driver GPS ingestion, ride tracking, and operator map data for FR-TRACK-01 through FR-TRACK-04.
+paths:
+  /drivers/me/location:
+    put:
+      tags: [Tracking]
+      summary: Submit the driver's current GPS position
+      operationId: updateDriverLocation
+      x-fr-ids: [FR-TRACK-01]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude: { type: number, minimum: -90, maximum: 90 }
+                longitude: { type: number, minimum: -180, maximum: 180 }
+                bearing: { type: number, minimum: 0, maximum: 360 }
+                speed: { type: number, minimum: 0 }
+                recordedAt: { type: string, format: date-time }
+      responses:
+        '204': { description: Location accepted and broadcast to authorized ride participants }
+        '403': { description: Driver is not authorized to submit location }
+  /rides/{rideId}/location:
+    get:
+      tags: [Tracking]
+      summary: Get the assigned driver's latest position and ETA
+      operationId: getRideLocation
+      x-fr-ids: [FR-TRACK-02, FR-TRACK-03]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Driver location and estimated arrival time }
+        '404': { description: Ride or current location not found }
+  /admin/driver-locations:
+    get:
+      tags: [Tracking]
+      summary: List active driver locations for the operations map
+      operationId: listDriverLocations
+      x-fr-ids: [FR-TRACK-04]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: latitude, in: query, required: true, schema: { type: number } }
+        - { name: longitude, in: query, required: true, schema: { type: number } }
+        - { name: radiusKm, in: query, schema: { type: number, minimum: 0, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Active drivers and their availability states }
+        '403': { description: Operator or admin role required }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

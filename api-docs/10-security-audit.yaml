@@ -1,0 +1,43 @@
+openapi: 3.0.3
+info:
+  title: CAB Security and Audit API
+  version: 1.0.0
+  description: RBAC-protected audit access, password security, and health checks for FR-SEC-01 through FR-SEC-05.
+paths:
+  /admin/audit-logs:
+    get:
+      tags: [Security and Audit]
+      summary: Search immutable audit events
+      operationId: listAuditLogs
+      x-fr-ids: [FR-SEC-01, FR-SEC-02, FR-SEC-03]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: action, in: query, schema: { type: string } }
+        - { name: resource, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+      responses:
+        '200': { description: Paginated audit log; records are read-only }
+        '403': { description: Admin role required }
+  /health:
+    get:
+      tags: [Security and Audit]
+      summary: Check API process health
+      operationId: getHealth
+      x-fr-ids: [FR-SEC-05]
+      responses:
+        '200': { description: API process is healthy }
+        '503': { description: API process is unavailable }
+  /health/db:
+    get:
+      tags: [Security and Audit]
+      summary: Check database connectivity
+      operationId: getDatabaseHealth
+      x-fr-ids: [FR-SEC-05]
+      responses:
+        '200': { description: Database is reachable }
+        '503': { description: Database is unavailable }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

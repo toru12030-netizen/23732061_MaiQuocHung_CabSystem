@@ -1,0 +1,133 @@
+openapi: 3.0.3
+info:
+  title: CAB Administration API
+  version: 1.0.0
+  description: Operational dashboard, account and ride management, payment lookup, and reports for FR-ADM-01 through FR-ADM-08.
+paths:
+  /admin/dashboard:
+    get:
+      tags: [Administration]
+      summary: Get dashboard metrics
+      operationId: getAdminDashboard
+      x-fr-ids: [FR-ADM-01]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        '200': { description: Ride, revenue, active-driver, and in-progress metrics }
+        '403': { description: Operator or admin role required }
+  /admin/customers:
+    get:
+      tags: [Administration]
+      summary: Search and list customers
+      operationId: listCustomers
+      x-fr-ids: [FR-ADM-02]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Paginated customer list }
+  /admin/drivers:
+    get:
+      tags: [Administration]
+      summary: Search and list drivers and vehicles
+      operationId: listDrivers
+      x-fr-ids: [FR-ADM-03]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [offline, available, busy, suspended] } }
+        - { name: approved, in: query, schema: { type: boolean } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+      responses:
+        '200': { description: Paginated driver and vehicle list }
+  /admin/rides:
+    get:
+      tags: [Administration]
+      summary: Search and monitor rides
+      operationId: listAdminRides
+      x-fr-ids: [FR-ADM-04]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        '200': { description: Filtered ride list }
+    post:
+      tags: [Administration]
+      summary: Intervene in an operational ride
+      operationId: interveneInRide
+      x-fr-ids: [FR-ADM-04]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rideId, action]
+              properties:
+                rideId: { type: string }
+                action: { type: string, enum: [force_cancel, rematch] }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '202': { description: Intervention accepted and audit logged }
+        '403': { description: Operator or admin role required }
+  /admin/payments:
+    get:
+      tags: [Administration]
+      summary: Search payment transactions
+      operationId: listAdminPayments
+      x-fr-ids: [FR-ADM-05]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: transactionId, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, COMPLETED, FAILED, REFUNDED] } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        '200': { description: Paginated payment transactions }
+  /admin/reports/revenue:
+    get:
+      tags: [Administration]
+      summary: Get revenue report
+      operationId: getRevenueReport
+      x-fr-ids: [FR-ADM-06]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: groupBy, in: query, schema: { type: string, enum: [day, week, month, vehicleType, paymentMethod] } }
+      responses:
+        '200': { description: Revenue totals and grouped report data }
+        '400': { description: Invalid date range }
+  /admin/reports/rides:
+    get:
+      tags: [Administration]
+      summary: Get ride completion and cancellation report
+      operationId: getRideReport
+      x-fr-ids: [FR-ADM-07]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200': { description: Ride counts and completion/cancellation rates }
+        '400': { description: Invalid date range }
+  /admin/reports/drivers:
+    get:
+      tags: [Administration]
+      summary: Get driver performance report
+      operationId: getDriverReport
+      x-fr-ids: [FR-ADM-08]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: month, in: query, required: true, schema: { type: string, pattern: '^\\d{4}-\\d{2}$' } }
+      responses:
+        '200': { description: Driver rides, earnings, ratings, and decline-rate metrics }
+        '403': { description: Admin role required }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

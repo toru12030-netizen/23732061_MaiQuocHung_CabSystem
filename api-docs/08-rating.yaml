@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: CAB Rating API
+  version: 1.0.0
+  description: Ride reviews and driver rating summaries for FR-RATE-01 through FR-RATE-03.
+paths:
+  /rides/{rideId}/rating:
+    post:
+      tags: [Ratings]
+      summary: Submit a rating for a completed ride
+      operationId: createRideRating
+      x-fr-ids: [FR-RATE-01, FR-RATE-02]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [score]
+              properties:
+                score: { type: integer, minimum: 1, maximum: 5 }
+                comment: { type: string, maxLength: 500 }
+      responses:
+        '201': { description: Rating recorded and driver average updated }
+        '409': { description: Ride is not eligible or has already been rated }
+  /drivers/{driverId}/ratings:
+    get:
+      tags: [Ratings]
+      summary: List reviews for a driver
+      operationId: listDriverRatings
+      x-fr-ids: [FR-RATE-03]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: driverId, in: path, required: true, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Paginated reviews with no sensitive customer data }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

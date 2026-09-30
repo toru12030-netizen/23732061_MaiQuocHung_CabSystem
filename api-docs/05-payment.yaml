@@ -1,0 +1,85 @@
+openapi: 3.0.3
+info:
+  title: CAB Fare and Payment API
+  version: 1.0.0
+  description: Fare calculation, pricing configuration, payments, and invoices for FR-PAY-01 through FR-PAY-07.
+paths:
+  /admin/pricing:
+    get:
+      tags: [Payments]
+      summary: List active fare configurations
+      operationId: listPricing
+      x-fr-ids: [FR-PAY-02]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Fare configuration by vehicle type }
+    put:
+      tags: [Payments]
+      summary: Update a vehicle fare configuration
+      operationId: updatePricing
+      x-fr-ids: [FR-PAY-02]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vehicleType, baseFare, pricePerKm, pricePerMin]
+              properties:
+                vehicleType: { type: string, enum: [sedan, suv, van] }
+                baseFare: { type: number, minimum: 0 }
+                pricePerKm: { type: number, minimum: 0 }
+                pricePerMin: { type: number, minimum: 0 }
+      responses:
+        '200': { description: Pricing updated and audit logged }
+        '403': { description: Admin role required }
+  /rides/{rideId}/payment:
+    get:
+      tags: [Payments]
+      summary: View payment and fare breakdown
+      operationId: getRidePayment
+      x-fr-ids: [FR-PAY-01, FR-PAY-07]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Fare breakdown and payment status }
+        '404': { description: Payment not found }
+  /rides/{rideId}/payment/checkout:
+    post:
+      tags: [Payments]
+      summary: Start an electronic payment attempt
+      operationId: checkoutRidePayment
+      x-fr-ids: [FR-PAY-05, FR-PAY-06]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method]
+              properties:
+                method: { type: string, enum: [EWALLET, CARD] }
+                paymentToken: { type: string, description: Opaque mock-provider token; never send raw card details }
+      responses:
+        '200': { description: Payment result and provider transaction identifier }
+        '402': { description: Payment failed; retry or cash fallback is available }
+  /rides/{rideId}/payment/cash-confirmation:
+    post:
+      tags: [Payments]
+      summary: Confirm cash collection as assigned driver
+      operationId: confirmCashPayment
+      x-fr-ids: [FR-PAY-03, FR-PAY-04]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Cash payment marked completed }
+        '409': { description: Payment is not pending cash collection }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

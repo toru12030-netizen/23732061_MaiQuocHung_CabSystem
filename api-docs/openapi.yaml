@@ -1,0 +1,1495 @@
+---
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: Aggregate entry point for the CAB System API. Module path items are
+    kept in separate files and referenced here; bundle this entry point with an OpenAPI
+    bundler when a single-file distribution is required.
+servers:
+- url: http://localhost:3000/api
+  description: Local development server
+tags:
+- name: Authentication
+- name: Drivers and Vehicles
+- name: Rides
+- name: Matching
+- name: Payments
+- name: Tracking
+- name: Notifications
+- name: Ratings
+- name: Administration
+- name: Security and Audit
+paths:
+  "/auth/register/customer":
+    post:
+      tags:
+      - Authentication
+      summary: Register a customer
+      operationId: registerCustomer
+      x-fr-ids:
+      - FR-AUTH-01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - fullName
+              - email
+              - phone
+              - password
+              properties:
+                fullName:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                password:
+                  type: string
+                  minLength: 6
+                  writeOnly: true
+      responses:
+        '201':
+          description: Customer account created
+        '409':
+          description: Email or phone already exists
+  "/auth/register/driver":
+    post:
+      tags:
+      - Authentication
+      summary: Submit a driver registration
+      operationId: registerDriver
+      x-fr-ids:
+      - FR-AUTH-02
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - fullName
+              - email
+              - phone
+              - password
+              - licenseNumber
+              - licenseClass
+              properties:
+                fullName:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                password:
+                  type: string
+                  minLength: 6
+                  writeOnly: true
+                licenseNumber:
+                  type: string
+                licenseClass:
+                  type: string
+                licenseImageUrl:
+                  type: string
+                  format: uri
+      responses:
+        '201':
+          description: Driver application submitted for approval
+        '409':
+          description: Account or license already exists
+  "/auth/login":
+    post:
+      tags:
+      - Authentication
+      summary: Authenticate a user
+      operationId: login
+      x-fr-ids:
+      - FR-AUTH-03
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - identifier
+              - password
+              properties:
+                identifier:
+                  type: string
+                  description: Email or phone number
+                password:
+                  type: string
+                  writeOnly: true
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/AuthSession"
+        '401':
+          description: Invalid credentials
+        '403':
+          description: Account is inactive
+  "/auth/profile":
+    patch:
+      tags:
+      - Authentication
+      summary: Update the current user's profile
+      operationId: updateProfile
+      x-fr-ids:
+      - FR-AUTH-04
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                phone:
+                  type: string
+                avatarUrl:
+                  type: string
+                  format: uri
+                  nullable: true
+      responses:
+        '200':
+          description: Profile updated
+        '401':
+          description: Authentication required
+  "/auth/password":
+    put:
+      tags:
+      - Authentication
+      summary: Change the current user's password
+      operationId: changePassword
+      x-fr-ids:
+      - FR-AUTH-05
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - currentPassword
+              - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                  writeOnly: true
+                newPassword:
+                  type: string
+                  minLength: 6
+                  writeOnly: true
+      responses:
+        '204':
+          description: Password changed and existing sessions revoked
+        '400':
+          description: Current password is incorrect
+  "/auth/logout":
+    post:
+      tags:
+      - Authentication
+      summary: Revoke the current refresh-token session
+      operationId: logout
+      x-fr-ids:
+      - FR-AUTH-06
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: Session revoked
+        '401':
+          description: Authentication required
+  "/drivers/me/vehicles":
+    get:
+      tags:
+      - Drivers and Vehicles
+      summary: List the current driver's vehicles
+      operationId: listMyVehicles
+      x-fr-ids:
+      - FR-DRV-01
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Vehicle list
+    post:
+      tags:
+      - Drivers and Vehicles
+      summary: Register a vehicle
+      operationId: registerVehicle
+      x-fr-ids:
+      - FR-DRV-01
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - plateNumber
+              - brand
+              - model
+              - color
+              - vehicleType
+              - seats
+              properties:
+                plateNumber:
+                  type: string
+                brand:
+                  type: string
+                model:
+                  type: string
+                color:
+                  type: string
+                vehicleType:
+                  type: string
+                  enum:
+                  - sedan
+                  - suv
+                  - van
+                seats:
+                  type: integer
+                  minimum: 4
+                  maximum: 16
+                registrationImageUrl:
+                  type: string
+                  format: uri
+      responses:
+        '201':
+          description: Vehicle registered
+        '409':
+          description: Plate number already exists
+  "/drivers/me/status":
+    put:
+      tags:
+      - Drivers and Vehicles
+      summary: Change driver availability
+      operationId: updateDriverStatus
+      x-fr-ids:
+      - FR-DRV-02
+      - FR-DRV-03
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - status
+              properties:
+                status:
+                  type: string
+                  enum:
+                  - offline
+                  - available
+      responses:
+        '200':
+          description: Driver status updated
+        '403':
+          description: Driver is not approved or active
+  "/drivers/me/performance":
+    get:
+      tags:
+      - Drivers and Vehicles
+      summary: View driver performance and earnings
+      operationId: getDriverPerformance
+      x-fr-ids:
+      - FR-DRV-05
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Performance summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalRides:
+                    type: integer
+                  rating:
+                    type: number
+                    minimum: 1
+                    maximum: 5
+                  totalEarnings:
+                    type: number
+                    minimum: 0
+  "/admin/drivers/{driverId}/approval":
+    put:
+      tags:
+      - Drivers and Vehicles
+      summary: Approve or reject a driver application
+      operationId: reviewDriverApplication
+      x-fr-ids:
+      - FR-DRV-04
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: driverId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - decision
+              properties:
+                decision:
+                  type: string
+                  enum:
+                  - approved
+                  - rejected
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Application reviewed and audit event recorded
+        '403':
+          description: Operator or admin role required
+  "/admin/drivers/{driverId}/suspension":
+    put:
+      tags:
+      - Drivers and Vehicles
+      summary: Suspend or reactivate a driver
+      operationId: setDriverSuspension
+      x-fr-ids:
+      - FR-DRV-06
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: driverId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - active
+              properties:
+                active:
+                  type: boolean
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Driver account status updated
+        '403':
+          description: Admin role required
+  "/rides/estimate":
+    post:
+      tags:
+      - Rides
+      summary: Estimate distance, duration, and fares
+      operationId: estimateRide
+      x-fr-ids:
+      - FR-RIDE-01
+      - FR-RIDE-02
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - pickup
+              - dropoff
+              properties:
+                pickup:
+                  "$ref": "#/components/schemas/Place"
+                dropoff:
+                  "$ref": "#/components/schemas/Place"
+      responses:
+        '200':
+          description: Route and fare estimates by vehicle type
+        '422':
+          description: Invalid or unresolved location
+  "/rides":
+    post:
+      tags:
+      - Rides
+      summary: Create a ride request
+      operationId: createRide
+      x-fr-ids:
+      - FR-RIDE-03
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - pickup
+              - dropoff
+              - vehicleType
+              - paymentMethod
+              properties:
+                pickup:
+                  "$ref": "#/components/schemas/Place"
+                dropoff:
+                  "$ref": "#/components/schemas/Place"
+                vehicleType:
+                  type: string
+                  enum:
+                  - sedan
+                  - suv
+                  - van
+                paymentMethod:
+                  type: string
+                  enum:
+                  - CASH
+                  - EWALLET
+                  - CARD
+      responses:
+        '201':
+          description: Ride created and matching started
+        '409':
+          description: Customer already has an active ride
+    get:
+      tags:
+      - Rides
+      summary: List the current user's ride history
+      operationId: listRides
+      x-fr-ids:
+      - FR-RIDE-09
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      responses:
+        '200':
+          description: Paginated ride history
+  "/rides/{rideId}":
+    get:
+      tags:
+      - Rides
+      summary: Get ride details
+      operationId: getRide
+      x-fr-ids:
+      - FR-RIDE-09
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ride details
+        '404':
+          description: Ride not found
+        '403':
+          description: Ride is not accessible to this user
+  "/rides/{rideId}/cancel":
+    post:
+      tags:
+      - Rides
+      summary: Cancel a ride as customer or driver
+      operationId: cancelRide
+      x-fr-ids:
+      - FR-RIDE-07
+      - FR-RIDE-08
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Ride cancelled and relevant parties notified
+        '409':
+          description: Ride cannot be cancelled in its current state
+  "/rides/{rideId}/status":
+    put:
+      tags:
+      - Rides
+      summary: Advance the ride lifecycle
+      operationId: updateRideStatus
+      x-fr-ids:
+      - FR-RIDE-04
+      - FR-RIDE-05
+      - FR-RIDE-06
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - status
+              properties:
+                status:
+                  type: string
+                  enum:
+                  - driver_arrived
+                  - in_progress
+                  - completed
+                endLocation:
+                  "$ref": "#/components/schemas/Coordinate"
+      responses:
+        '200':
+          description: Ride state advanced and event emitted
+        '409':
+          description: Invalid lifecycle transition
+  "/rides/{rideId}/offers":
+    get:
+      tags:
+      - Matching
+      summary: Get the current driver's pending offer
+      operationId: getDriverOffer
+      x-fr-ids:
+      - FR-MATCH-01
+      - FR-MATCH-03
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Pending offer and response deadline
+        '404':
+          description: No pending offer
+  "/rides/{rideId}/offers/accept":
+    post:
+      tags:
+      - Matching
+      summary: Accept a ride offer atomically
+      operationId: acceptRideOffer
+      x-fr-ids:
+      - FR-MATCH-04
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Offer accepted; driver becomes busy
+        '409':
+          description: Offer expired or already assigned
+  "/rides/{rideId}/offers/decline":
+    post:
+      tags:
+      - Matching
+      summary: Decline a ride offer and continue matching
+      operationId: declineRideOffer
+      x-fr-ids:
+      - FR-MATCH-05
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 250
+      responses:
+        '202':
+          description: Driver excluded for this ride; next candidate is being contacted
+        '409':
+          description: Offer is no longer active
+  "/rides/{rideId}/matching":
+    get:
+      tags:
+      - Matching
+      summary: Get matching status for a ride
+      operationId: getMatchingStatus
+      x-fr-ids:
+      - FR-MATCH-02
+      - FR-MATCH-06
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Current matching state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - searching
+                    - accepted
+                    - no_driver
+                  retryCount:
+                    type: integer
+                    minimum: 0
+                    maximum: 5
+                  responseTimeoutSeconds:
+                    type: integer
+                    example: 30
+  "/admin/pricing":
+    get:
+      tags:
+      - Payments
+      summary: List active fare configurations
+      operationId: listPricing
+      x-fr-ids:
+      - FR-PAY-02
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Fare configuration by vehicle type
+    put:
+      tags:
+      - Payments
+      summary: Update a vehicle fare configuration
+      operationId: updatePricing
+      x-fr-ids:
+      - FR-PAY-02
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - vehicleType
+              - baseFare
+              - pricePerKm
+              - pricePerMin
+              properties:
+                vehicleType:
+                  type: string
+                  enum:
+                  - sedan
+                  - suv
+                  - van
+                baseFare:
+                  type: number
+                  minimum: 0
+                pricePerKm:
+                  type: number
+                  minimum: 0
+                pricePerMin:
+                  type: number
+                  minimum: 0
+      responses:
+        '200':
+          description: Pricing updated and audit logged
+        '403':
+          description: Admin role required
+  "/rides/{rideId}/payment":
+    get:
+      tags:
+      - Payments
+      summary: View payment and fare breakdown
+      operationId: getRidePayment
+      x-fr-ids:
+      - FR-PAY-01
+      - FR-PAY-07
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Fare breakdown and payment status
+        '404':
+          description: Payment not found
+  "/rides/{rideId}/payment/checkout":
+    post:
+      tags:
+      - Payments
+      summary: Start an electronic payment attempt
+      operationId: checkoutRidePayment
+      x-fr-ids:
+      - FR-PAY-05
+      - FR-PAY-06
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - method
+              properties:
+                method:
+                  type: string
+                  enum:
+                  - EWALLET
+                  - CARD
+                paymentToken:
+                  type: string
+                  description: Opaque mock-provider token; never send raw card details
+      responses:
+        '200':
+          description: Payment result and provider transaction identifier
+        '402':
+          description: Payment failed; retry or cash fallback is available
+  "/rides/{rideId}/payment/cash-confirmation":
+    post:
+      tags:
+      - Payments
+      summary: Confirm cash collection as assigned driver
+      operationId: confirmCashPayment
+      x-fr-ids:
+      - FR-PAY-03
+      - FR-PAY-04
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Cash payment marked completed
+        '409':
+          description: Payment is not pending cash collection
+  "/drivers/me/location":
+    put:
+      tags:
+      - Tracking
+      summary: Submit the driver's current GPS position
+      operationId: updateDriverLocation
+      x-fr-ids:
+      - FR-TRACK-01
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - latitude
+              - longitude
+              properties:
+                latitude:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+                longitude:
+                  type: number
+                  minimum: -180
+                  maximum: 180
+                bearing:
+                  type: number
+                  minimum: 0
+                  maximum: 360
+                speed:
+                  type: number
+                  minimum: 0
+                recordedAt:
+                  type: string
+                  format: date-time
+      responses:
+        '204':
+          description: Location accepted and broadcast to authorized ride participants
+        '403':
+          description: Driver is not authorized to submit location
+  "/rides/{rideId}/location":
+    get:
+      tags:
+      - Tracking
+      summary: Get the assigned driver's latest position and ETA
+      operationId: getRideLocation
+      x-fr-ids:
+      - FR-TRACK-02
+      - FR-TRACK-03
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Driver location and estimated arrival time
+        '404':
+          description: Ride or current location not found
+  "/admin/driver-locations":
+    get:
+      tags:
+      - Tracking
+      summary: List active driver locations for the operations map
+      operationId: listDriverLocations
+      x-fr-ids:
+      - FR-TRACK-04
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: latitude
+        in: query
+        required: true
+        schema:
+          type: number
+      - name: longitude
+        in: query
+        required: true
+        schema:
+          type: number
+      - name: radiusKm
+        in: query
+        schema:
+          type: number
+          minimum: 0
+          maximum: 100
+          default: 20
+      responses:
+        '200':
+          description: Active drivers and their availability states
+        '403':
+          description: Operator or admin role required
+  "/notifications":
+    get:
+      tags:
+      - Notifications
+      summary: List the current user's notifications
+      operationId: listNotifications
+      x-fr-ids:
+      - FR-NOTIF-01
+      - FR-NOTIF-03
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: unreadOnly
+        in: query
+        schema:
+          type: boolean
+          default: false
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      responses:
+        '200':
+          description: Paginated notification list and unread count
+  "/notifications/read-all":
+    post:
+      tags:
+      - Notifications
+      summary: Mark all current user's notifications as read
+      operationId: markAllNotificationsRead
+      x-fr-ids:
+      - FR-NOTIF-04
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: All notifications marked read
+  "/notifications/{notificationId}/read":
+    put:
+      tags:
+      - Notifications
+      summary: Mark a notification as read
+      operationId: markNotificationRead
+      x-fr-ids:
+      - FR-NOTIF-04
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Notification marked read
+        '404':
+          description: Notification not found
+  "/rides/{rideId}/rating":
+    post:
+      tags:
+      - Ratings
+      summary: Submit a rating for a completed ride
+      operationId: createRideRating
+      x-fr-ids:
+      - FR-RATE-01
+      - FR-RATE-02
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: rideId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - score
+              properties:
+                score:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                comment:
+                  type: string
+                  maxLength: 500
+      responses:
+        '201':
+          description: Rating recorded and driver average updated
+        '409':
+          description: Ride is not eligible or has already been rated
+  "/drivers/{driverId}/ratings":
+    get:
+      tags:
+      - Ratings
+      summary: List reviews for a driver
+      operationId: listDriverRatings
+      x-fr-ids:
+      - FR-RATE-03
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: driverId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      responses:
+        '200':
+          description: Paginated reviews with no sensitive customer data
+  "/admin/dashboard":
+    get:
+      tags:
+      - Administration
+      summary: Get dashboard metrics
+      operationId: getAdminDashboard
+      x-fr-ids:
+      - FR-ADM-01
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: date
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Dashboard metrics
+        '403':
+          description: Operator or admin role required
+  "/admin/customers":
+    get:
+      tags:
+      - Administration
+      summary: Search and list customers
+      operationId: listCustomers
+      x-fr-ids:
+      - FR-ADM-02
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: search
+        in: query
+        schema:
+          type: string
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      responses:
+        '200':
+          description: Paginated customer list
+  "/admin/drivers":
+    get:
+      tags:
+      - Administration
+      summary: Search and list drivers and vehicles
+      operationId: listDrivers
+      x-fr-ids:
+      - FR-ADM-03
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - offline
+          - available
+          - busy
+          - suspended
+      - name: approved
+        in: query
+        schema:
+          type: boolean
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      responses:
+        '200':
+          description: Paginated driver and vehicle list
+  "/admin/rides":
+    get:
+      tags:
+      - Administration
+      summary: Search and monitor rides
+      operationId: listAdminRides
+      x-fr-ids:
+      - FR-ADM-04
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Filtered ride list
+    post:
+      tags:
+      - Administration
+      summary: Intervene in an operational ride
+      operationId: interveneInRide
+      x-fr-ids:
+      - FR-ADM-04
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - rideId
+              - action
+              properties:
+                rideId:
+                  type: string
+                action:
+                  type: string
+                  enum:
+                  - force_cancel
+                  - rematch
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '202':
+          description: Intervention accepted and audit logged
+        '403':
+          description: Operator or admin role required
+  "/admin/payments":
+    get:
+      tags:
+      - Administration
+      summary: Search payment transactions
+      operationId: listAdminPayments
+      x-fr-ids:
+      - FR-ADM-05
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: transactionId
+        in: query
+        schema:
+          type: string
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+          - REFUNDED
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Paginated payment transactions
+  "/admin/reports/revenue":
+    get:
+      tags:
+      - Administration
+      summary: Get revenue report
+      operationId: getRevenueReport
+      x-fr-ids:
+      - FR-ADM-06
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: groupBy
+        in: query
+        schema:
+          type: string
+          enum:
+          - day
+          - week
+          - month
+          - vehicleType
+          - paymentMethod
+      responses:
+        '200':
+          description: Revenue totals and grouped report data
+        '400':
+          description: Invalid date range
+  "/admin/reports/rides":
+    get:
+      tags:
+      - Administration
+      summary: Get ride completion and cancellation report
+      operationId: getRideReport
+      x-fr-ids:
+      - FR-ADM-07
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Ride counts and completion/cancellation rates
+        '400':
+          description: Invalid date range
+  "/admin/reports/drivers":
+    get:
+      tags:
+      - Administration
+      summary: Get driver performance report
+      operationId: getDriverReport
+      x-fr-ids:
+      - FR-ADM-08
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: month
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: "^\\\\d{4}-\\\\d{2}$"
+      responses:
+        '200':
+          description: Driver performance report
+        '403':
+          description: Admin role required
+  "/admin/audit-logs":
+    get:
+      tags:
+      - Security and Audit
+      summary: Search immutable audit events
+      operationId: listAuditLogs
+      x-fr-ids:
+      - FR-SEC-01
+      - FR-SEC-02
+      - FR-SEC-03
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: action
+        in: query
+        schema:
+          type: string
+      - name: resource
+        in: query
+        schema:
+          type: string
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      responses:
+        '200':
+          description: Paginated audit log; records are read-only
+        '403':
+          description: Admin role required
+  "/health":
+    get:
+      tags:
+      - Security and Audit
+      summary: Check API process health
+      operationId: getHealth
+      x-fr-ids:
+      - FR-SEC-05
+      responses:
+        '200':
+          description: API process is healthy
+        '503':
+          description: API process is unavailable
+  "/health/db":
+    get:
+      tags:
+      - Security and Audit
+      summary: Check database connectivity
+      operationId: getDatabaseHealth
+      x-fr-ids:
+      - FR-SEC-05
+      responses:
+        '200':
+          description: Database is reachable
+        '503':
+          description: Database is unavailable
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    AuthSession:
+      type: object
+      required:
+      - accessToken
+      - refreshToken
+      - expiresIn
+      - user
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+          writeOnly: true
+        expiresIn:
+          type: integer
+          example: 900
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            fullName:
+              type: string
+            role:
+              type: string
+              enum:
+              - customer
+              - driver
+              - operator
+              - admin
+    Coordinate:
+      type: object
+      required:
+      - latitude
+      - longitude
+      properties:
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+    Place:
+      type: object
+      required:
+      - address
+      - location
+      properties:
+        address:
+          type: string
+          minLength: 5
+          maxLength: 255
+        location:
+          "$ref": "#/components/schemas/Coordinate"

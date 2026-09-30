@@ -1,0 +1,72 @@
+openapi: 3.0.3
+info:
+  title: CAB Driver Matching API
+  version: 1.0.0
+  description: Driver discovery, offers, acceptance, and retry handling for FR-MATCH-01 through FR-MATCH-06.
+paths:
+  /rides/{rideId}/offers:
+    get:
+      tags: [Matching]
+      summary: Get the current driver's pending offer
+      operationId: getDriverOffer
+      x-fr-ids: [FR-MATCH-01, FR-MATCH-03]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Pending offer and response deadline }
+        '404': { description: No pending offer }
+  /rides/{rideId}/offers/accept:
+    post:
+      tags: [Matching]
+      summary: Accept a ride offer atomically
+      operationId: acceptRideOffer
+      x-fr-ids: [FR-MATCH-04]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Offer accepted; driver becomes busy }
+        '409': { description: Offer expired or already assigned }
+  /rides/{rideId}/offers/decline:
+    post:
+      tags: [Matching]
+      summary: Decline a ride offer and continue matching
+      operationId: declineRideOffer
+      x-fr-ids: [FR-MATCH-05]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 250 }
+      responses:
+        '202': { description: Driver excluded for this ride; next candidate is being contacted }
+        '409': { description: Offer is no longer active }
+  /rides/{rideId}/matching:
+    get:
+      tags: [Matching]
+      summary: Get matching status for a ride
+      operationId: getMatchingStatus
+      x-fr-ids: [FR-MATCH-02, FR-MATCH-06]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Current matching state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [searching, accepted, no_driver] }
+                  retryCount: { type: integer, minimum: 0, maximum: 5 }
+                  responseTimeoutSeconds: { type: integer, example: 30 }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

@@ -1,0 +1,123 @@
+openapi: 3.0.3
+info:
+  title: CAB Driver and Vehicle API
+  version: 1.0.0
+  description: Driver and vehicle operations for FR-DRV-01 through FR-DRV-06.
+paths:
+  /drivers/me/vehicles:
+    get:
+      tags: [Drivers and Vehicles]
+      summary: List the current driver's vehicles
+      operationId: listMyVehicles
+      x-fr-ids: [FR-DRV-01]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Vehicle list }
+    post:
+      tags: [Drivers and Vehicles]
+      summary: Register a vehicle
+      operationId: registerVehicle
+      x-fr-ids: [FR-DRV-01]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plateNumber, brand, model, color, vehicleType, seats]
+              properties:
+                plateNumber: { type: string }
+                brand: { type: string }
+                model: { type: string }
+                color: { type: string }
+                vehicleType: { type: string, enum: [sedan, suv, van] }
+                seats: { type: integer, minimum: 4, maximum: 16 }
+                registrationImageUrl: { type: string, format: uri }
+      responses:
+        '201': { description: Vehicle registered }
+        '409': { description: Plate number already exists }
+  /drivers/me/status:
+    put:
+      tags: [Drivers and Vehicles]
+      summary: Change driver availability
+      operationId: updateDriverStatus
+      x-fr-ids: [FR-DRV-02, FR-DRV-03]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [offline, available] }
+      responses:
+        '200': { description: Driver status updated }
+        '403': { description: Driver is not approved or active }
+  /drivers/me/performance:
+    get:
+      tags: [Drivers and Vehicles]
+      summary: View driver performance and earnings
+      operationId: getDriverPerformance
+      x-fr-ids: [FR-DRV-05]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Performance summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalRides: { type: integer }
+                  rating: { type: number, minimum: 1, maximum: 5 }
+                  totalEarnings: { type: number, minimum: 0 }
+  /admin/drivers/{driverId}/approval:
+    put:
+      tags: [Drivers and Vehicles]
+      summary: Approve or reject a driver application
+      operationId: reviewDriverApplication
+      x-fr-ids: [FR-DRV-04]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: driverId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approved, rejected] }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Application reviewed and audit event recorded }
+        '403': { description: Operator or admin role required }
+  /admin/drivers/{driverId}/suspension:
+    put:
+      tags: [Drivers and Vehicles]
+      summary: Suspend or reactivate a driver
+      operationId: setDriverSuspension
+      x-fr-ids: [FR-DRV-06]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: driverId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [active]
+              properties:
+                active: { type: boolean }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Driver account status updated }
+        '403': { description: Admin role required }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

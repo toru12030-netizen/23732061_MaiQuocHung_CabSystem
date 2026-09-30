@@ -1,0 +1,130 @@
+openapi: 3.0.3
+info:
+  title: CAB Ride Booking API
+  version: 1.0.0
+  description: Ride estimates, booking, lifecycle, cancellation, and history for FR-RIDE-01 through FR-RIDE-09.
+paths:
+  /rides/estimate:
+    post:
+      tags: [Rides]
+      summary: Estimate distance, duration, and fares
+      operationId: estimateRide
+      x-fr-ids: [FR-RIDE-01, FR-RIDE-02]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pickup, dropoff]
+              properties:
+                pickup: { $ref: '#/components/schemas/Place' }
+                dropoff: { $ref: '#/components/schemas/Place' }
+      responses:
+        '200': { description: Route and fare estimates by vehicle type }
+        '422': { description: Invalid or unresolved location }
+  /rides:
+    post:
+      tags: [Rides]
+      summary: Create a ride request
+      operationId: createRide
+      x-fr-ids: [FR-RIDE-03]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pickup, dropoff, vehicleType, paymentMethod]
+              properties:
+                pickup: { $ref: '#/components/schemas/Place' }
+                dropoff: { $ref: '#/components/schemas/Place' }
+                vehicleType: { type: string, enum: [sedan, suv, van] }
+                paymentMethod: { type: string, enum: [CASH, EWALLET, CARD] }
+      responses:
+        '201': { description: Ride created and matching started }
+        '409': { description: Customer already has an active ride }
+    get:
+      tags: [Rides]
+      summary: List the current user's ride history
+      operationId: listRides
+      x-fr-ids: [FR-RIDE-09]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Paginated ride history }
+  /rides/{rideId}:
+    get:
+      tags: [Rides]
+      summary: Get ride details
+      operationId: getRide
+      x-fr-ids: [FR-RIDE-09]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Ride details }
+        '404': { description: Ride not found }
+        '403': { description: Ride is not accessible to this user }
+  /rides/{rideId}/cancel:
+    post:
+      tags: [Rides]
+      summary: Cancel a ride as customer or driver
+      operationId: cancelRide
+      x-fr-ids: [FR-RIDE-07, FR-RIDE-08]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Ride cancelled and relevant parties notified }
+        '409': { description: Ride cannot be cancelled in its current state }
+  /rides/{rideId}/status:
+    put:
+      tags: [Rides]
+      summary: Advance the ride lifecycle
+      operationId: updateRideStatus
+      x-fr-ids: [FR-RIDE-04, FR-RIDE-05, FR-RIDE-06]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rideId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [driver_arrived, in_progress, completed] }
+                endLocation: { $ref: '#/components/schemas/Coordinate' }
+      responses:
+        '200': { description: Ride state advanced and event emitted }
+        '409': { description: Invalid lifecycle transition }
+components:
+  schemas:
+    Coordinate:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+    Place:
+      type: object
+      required: [address, location]
+      properties:
+        address: { type: string, minLength: 5, maxLength: 255 }
+        location: { $ref: '#/components/schemas/Coordinate' }
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

@@ -1,0 +1,43 @@
+openapi: 3.0.3
+info:
+  title: CAB Notification API
+  version: 1.0.0
+  description: In-app notification inbox and read state for FR-NOTIF-01 through FR-NOTIF-05. Realtime delivery uses Socket.IO events.
+paths:
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List the current user's notifications
+      operationId: listNotifications
+      x-fr-ids: [FR-NOTIF-01, FR-NOTIF-03]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: unreadOnly, in: query, schema: { type: boolean, default: false } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Paginated notification list and unread count }
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark all current user's notifications as read
+      operationId: markAllNotificationsRead
+      x-fr-ids: [FR-NOTIF-04]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: All notifications marked read }
+  /notifications/{notificationId}/read:
+    put:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      operationId: markNotificationRead
+      x-fr-ids: [FR-NOTIF-04]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: notificationId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Notification marked read }
+        '404': { description: Notification not found }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

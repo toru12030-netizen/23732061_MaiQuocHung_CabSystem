@@ -1,0 +1,145 @@
+openapi: 3.0.3
+info:
+  title: CAB Auth API
+  version: 1.0.0
+  description: Authentication and account operations for FR-AUTH-01 through FR-AUTH-06.
+paths:
+  /auth/register/customer:
+    post:
+      tags: [Authentication]
+      summary: Register a customer
+      operationId: registerCustomer
+      x-fr-ids: [FR-AUTH-01]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, email, phone, password]
+              properties:
+                fullName: { type: string, minLength: 2, maxLength: 100 }
+                email: { type: string, format: email }
+                phone: { type: string }
+                password: { type: string, minLength: 6, writeOnly: true }
+      responses:
+        '201': { description: Customer account created }
+        '409': { description: Email or phone already exists }
+  /auth/register/driver:
+    post:
+      tags: [Authentication]
+      summary: Submit a driver registration
+      operationId: registerDriver
+      x-fr-ids: [FR-AUTH-02]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, email, phone, password, licenseNumber, licenseClass]
+              properties:
+                fullName: { type: string }
+                email: { type: string, format: email }
+                phone: { type: string }
+                password: { type: string, minLength: 6, writeOnly: true }
+                licenseNumber: { type: string }
+                licenseClass: { type: string }
+                licenseImageUrl: { type: string, format: uri }
+      responses:
+        '201': { description: Driver application submitted for approval }
+        '409': { description: Account or license already exists }
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate a user
+      operationId: login
+      x-fr-ids: [FR-AUTH-03]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier: { type: string, description: Email or phone number }
+                password: { type: string, writeOnly: true }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+        '401': { description: Invalid credentials }
+        '403': { description: Account is inactive }
+  /auth/profile:
+    patch:
+      tags: [Authentication]
+      summary: Update the current user's profile
+      operationId: updateProfile
+      x-fr-ids: [FR-AUTH-04]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName: { type: string, minLength: 2, maxLength: 100 }
+                phone: { type: string }
+                avatarUrl: { type: string, format: uri, nullable: true }
+      responses:
+        '200': { description: Profile updated }
+        '401': { description: Authentication required }
+  /auth/password:
+    put:
+      tags: [Authentication]
+      summary: Change the current user's password
+      operationId: changePassword
+      x-fr-ids: [FR-AUTH-05]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, writeOnly: true }
+                newPassword: { type: string, minLength: 6, writeOnly: true }
+      responses:
+        '204': { description: Password changed and existing sessions revoked }
+        '400': { description: Current password is incorrect }
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Revoke the current refresh-token session
+      operationId: logout
+      x-fr-ids: [FR-AUTH-06]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Session revoked }
+        '401': { description: Authentication required }
+components:
+  schemas:
+    AuthSession:
+      type: object
+      required: [accessToken, refreshToken, expiresIn, user]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string, writeOnly: true }
+        expiresIn: { type: integer, example: 900 }
+        user:
+          type: object
+          properties:
+            id: { type: string }
+            fullName: { type: string }
+            role: { type: string, enum: [customer, driver, operator, admin] }
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
