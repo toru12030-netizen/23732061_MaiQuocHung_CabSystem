@@ -1,1346 +1,288 @@
-# CAB System – DDD Bounded Context & Microservices (Bản rút gọn)
+# CAB System – Thiết kế Microservices và DDD
 
-> **Mục tiêu:** Tóm gọn thiết kế DDD của CAB System thành tài liệu có thể dùng trực tiếp cho thiết kế Microservices. Mỗi Bounded Context (BC) có ngôn ngữ nghiệp vụ riêng, aggregate riêng, microservice riêng và database riêng.
->
-> **Nguồn:** thiết kế hiện tại dựa trên `srs.md` của repository; giữ nguyên mapping FR/UC/BP, API, database và ERD đã xây dựng, nhưng loại bỏ các phần diễn giải lặp.
+**Phiên bản:** 2.0
+**Phạm vi:** MVP theo SRS CAB System v3.0 và OpenAPI trong `api-docs/`
+**Nguyên tắc:** tài liệu này mô tả kiến trúc đích cho bài thực hành; tên endpoint public phải khớp `api-docs/openapi.yaml`.
 
-## 1. Kiến trúc tổng thể
+## 1. Quyết định kiến trúc
 
-### 1.1. Bounded Context
+CAB dùng microservice theo bounded context, triển khai bằng Docker Compose cho môi trường local. Client chỉ truy cập qua API Gateway. Mỗi service sở hữu collection/database của mình, không truy vấn trực tiếp MongoDB của service khác. Giao tiếp nội bộ đồng bộ dùng HTTP khi cần phản hồi ngay; workflow bất đồng bộ dùng RabbitMQ.
 
-| BC | Bounded Context | Nhóm | Microservice | Vai trò |
-|---|---|---|---|---|
-| BC01 | Identity & Access | Generic | `identity-service` | Account, authentication, role, permission |
-| BC02 | Customer Profile | Supporting | `customer-service` | Hồ sơ khách hàng |
-| BC03 | Driver & Fleet | Supporting | `driver-fleet-service` | Driver, vehicle, availability, location |
-| BC04 | Booking | **Core** | `booking-service` | Yêu cầu đặt xe & lifecycle |
-| BC05 | Dispatch & Matching | **Core** | `dispatch-service` | Candidate, offer, assignment |
-| BC06 | Trip Execution & Tracking | **Core** | `trip-service` | Thực hiện trip & tracking |
-| BC07 | Pricing & Fare | Supporting | `pricing-service` | Tính/finalize fare |
-| BC08 | Payment | Supporting | `payment-service` | Thanh toán & provider |
-| BC09 | Notification | Supporting | `notification-service` | Gửi thông báo |
-| BC10 | Feedback & Trip History | Supporting | `feedback-history-service` | Rating & history projection |
-| BC11 | Operations | Supporting | `operations-service` | Incident & operator intervention |
-| BC12 | Reporting & Monitoring | Supporting | `reporting-service` | KPI, report, dashboard |
-| BC13 | Audit Trail | Generic | `audit-service` | Audit append-only |
+| Thành phần | Trách nhiệm chính | Data ownership |
+|---|---|---|
+| `api-gateway` | Entry point HTTP; route, JWT validation, RBAC coarse-grained, rate limit, correlation ID và chuẩn hóa lỗi | Không sở hữu domain data |
+| `auth-service` | Customer/Driver account, đăng ký, OTP, đăng nhập, token/session, hồ sơ người dùng cơ bản | `users`, `refresh_tokens`, OTP/verification records |
+| `driver-service` | Hồ sơ tài xế, xét duyệt, phương tiện, trạng thái online/busy và vị trí hiện tại | `driver_profiles`, `vehicles`, `driver_locations` |
+| `booking-service` | Ride/booking, dispatch, offer, matching retry và lifecycle chuyến | `rides`, `ride_offers`, trạng thái chuyến |
+| `payment-service` | Pricing config, fare, payment, provider callback và idempotency | `pricing_configs`, `payments`, idempotency records |
+| `review-service` | Đánh giá, rating trung bình và lịch sử chuyến đọc từ event projection | `rating_reviews`, `trip_history` projection |
+| `notification-service` | Hộp thư thông báo, email và Socket.IO delivery | `notifications`, delivery state |
+| `admin-service` | Dashboard/report queries, operator intervention workflow và audit log query/append | `audit_logs`, admin read projections; domain state vẫn thuộc service gốc |
+| MongoDB | Document persistence | Database/collection tách theo service ownership |
+| RabbitMQ | Integration event transport | Durable queues, retry và dead-letter queue |
 
-### 1.2. Business Process / Workflow chính
+`admin-service` là phần bổ sung để có nơi triển khai các API quản trị/audit đang có trong `api-docs/09-admin.yaml` và `10-security-audit.yaml`. Nó không được sửa trực tiếp dữ liệu của service nghiệp vụ; mọi thay đổi được gửi bằng API command tới owner service.
+
+### 1.1 Cấu trúc source code đề xuất
 
 ```text
-BP01 Registration/Profile
-       ↓
-BP02 Booking & Driver Assignment
-       ├── Booking
-       └── Dispatch & Matching
-             ↓
-BP03 Trip Execution & Tracking
-       ↓
-BP04 Fare & Payment
-       ├── Pricing & Fare
-       └── Payment
-       ↓
-BP05 Rating & Trip History
-
-Song song:
-BP06 Driver & Fleet Administration
-BP07 Operations Monitoring & Incident Handling
-BP08 Reporting & Business Monitoring
-BP09 Notification Delivery
-BP10 Access Control & Audit
+cab-system/
+  apps/
+    customer-web/
+    driver-web/
+    admin-web/
+  services/
+    api-gateway/
+    auth-service/
+    driver-service/
+    booking-service/
+    payment-service/
+    review-service/
+    notification-service/
+    admin-service/
+  packages/
+    api-contracts/
+    event-contracts/
+    shared-config/
+  infra/
+    docker-compose.yml
+    gateway/
+    rabbitmq/
+  api-docs/
+  postman/
+  .env.example
 ```
 
-### 1.3. Nguyên tắc DDD → Microservices
+Mỗi backend service giữ cấu trúc nhất quán `src/routes`, `src/controllers`, `src/services`, `src/models`, `src/middlewares`, `src/config`, `src/events`. Chỉ chia sẻ DTO/event schema và tiện ích thuần; không chia sẻ domain model hoặc model database giữa service.
 
-- **Một BC = một domain model riêng; một Microservice sở hữu BC đó.**
-- **Database-per-Microservice:** service khác chỉ giữ ID/reference hoặc projection, không truy cập DB trực tiếp.
-- `Customer`, `Driver`, `Booking`, `Trip`, `Payment` không phải shared entity toàn hệ thống; ý nghĩa được định nghĩa lại theo từng context.
-- Giao tiếp giữa service bằng REST/command hoặc Integration Event; Domain Event chỉ là nội bộ BC.
-- Với workflow nhiều service: ưu tiên **event-driven + Saga/Process Manager + Outbox + Idempotency** thay cho distributed transaction.
-- `Dispatch & Matching` giữ matching policy; SRS chưa chốt tiêu chí ưu tiên driver nên policy phải cấu hình/mở rộng, không hard-code.
+## 2. Bounded Context và quy trình nghiệp vụ
 
-### 1.4. Quan hệ context ở mức tối giản
-
-```text
-Identity → Customer / Driver / Operator
-Customer → Booking
-Driver & Fleet → Dispatch
-Booking → Dispatch
-Dispatch → Trip
-Trip → Pricing → Payment
-Trip → Feedback & History
-Booking / Dispatch / Trip / Payment → Notification
-Tất cả critical events → Audit
-Trip / Payment / Driver / Booking / Rating events → Reporting
-Operations đọc projection và gửi command tới domain owner
-```
-
----
-
-## 2. Template áp dụng cho từng BC
-
-Mỗi BC bên dưới luôn theo đúng thứ tự: **Mục đích của BC → FR liên quan → Workflow → Ubiquitous Language → Aggregate → Microservice → API chính → Database → ERD → Database type → Giải thích về lý do kỹ thuật → Domain Events**.
-
-# BC01 – Identity & Access / `identity-service`
-
-## 1. Mục đích của BC
-
-Quản lý technical identity, authentication, authorization, role và permission. BC này xác định “ai đang gọi” và “được phép làm gì”, nhưng không sở hữu Customer Profile hay Driver Profile.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-AC-01 → FR-AC-03; hỗ trợ FR-CM-02 |
-| **Use Cases** | UC02, UC21 |
-| **Business Process / Workflow** | BP01 – Customer Registration & Profile; BP10 – Access Control & Audit |
-
-## 3. Workflow
-
-Đăng ký account → xác thực credentials → cấp token/session → xác định Subject/Role → authorize request → phát hành security event/audit event.
-
-## 4. Ubiquitous Language
-
-`Account`, `Credential`, `Subject`, `Role`, `Permission`, `Token`, `Session`, `Authorization`, `AccountStatus`.
-
-## 5. Aggregate
-
-**Account Aggregate** – Root: `Account`. Thành phần: Credential, AccountStatus, Roles. Invariant: account inactive không được authenticate; role/permission chỉ thay đổi qua command được authorize.
-
-## 6. Microservice
-
-`identity-service` – deployable độc lập, stateless ở API layer; persistence thuộc `identity_db`. API Gateway có thể xác minh JWT tại edge nhưng service vẫn là source of truth cho account/role.
-
-**Service name:** `identity-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/api/v1/auth/register` | Đăng ký account |
-| POST | `/api/v1/auth/login` | Đăng nhập/cấp token |
-| POST | `/api/v1/auth/refresh` | Refresh token |
-| GET | `/api/v1/auth/me` | Lấy subject hiện tại |
-| GET | `/api/v1/accounts/{id}` | Tra cứu account |
-| PUT | `/api/v1/accounts/{id}/roles` | Gán role |
-
-## 8. Database
-
-`identity_db` – tài khoản, role, permission, refresh token; không tạo FK sang customer/driver service.
-
-## 9. ERD
+### 2.1 Context map
 
 ```mermaid
-erDiagram
-    ACCOUNTS ||--o{ ACCOUNT_ROLES : has
-    ROLES ||--o{ ACCOUNT_ROLES : assigned_to
-    ROLES ||--o{ ROLE_PERMISSIONS : grants
-    PERMISSIONS ||--o{ ROLE_PERMISSIONS : included_in
-    ACCOUNTS ||--o{ REFRESH_TOKENS : owns
-
-    ACCOUNTS {
-        uuid id PK
-        string username UK
-        string password_hash
-        string status
-        datetime created_at
-        datetime updated_at
-    }
-    ROLES {
-        uuid id PK
-        string code UK
-        string name
-    }
-    PERMISSIONS {
-        uuid id PK
-        string code UK
-        string name
-    }
-    ACCOUNT_ROLES {
-        uuid account_id FK
-        uuid role_id FK
-    }
-    ROLE_PERMISSIONS {
-        uuid role_id FK
-        uuid permission_id FK
-    }
-    REFRESH_TOKENS {
-        uuid id PK
-        uuid account_id FK
-        string token_hash
-        datetime expires_at
-        datetime revoked_at
-    }
+flowchart LR
+    Client[Customer / Driver / Admin Web] --> Gateway[API Gateway]
+    Gateway --> Auth[Auth Service]
+    Gateway --> Driver[Driver Service]
+    Gateway --> Booking[Booking Service]
+    Gateway --> Payment[Payment Service]
+    Gateway --> Review[Review Service]
+    Gateway --> Admin[Admin Service]
+    Gateway --> Notify[Notification Service]
+    Auth --> MQ[(RabbitMQ)]
+    Driver --> MQ
+    Booking --> MQ
+    Payment --> MQ
+    Review --> MQ
+    Admin --> MQ
+    MQ --> Notify
+    MQ --> Review
+    MQ --> Admin
+    Auth --> Mongo[(MongoDB - DB per service)]
+    Driver --> Mongo
+    Booking --> Mongo
+    Payment --> Mongo
+    Review --> Mongo
+    Notify --> Mongo
+    Admin --> Mongo
+    Notify --> Socket[Socket.IO]
+    Socket --> Client
+    Payment --> PGW[Mock Payment Provider]
+    Booking --> Map[Map Provider]
 ```
 
-## 10. Database type
+### 2.2 Luồng đặt xe đến đánh giá
 
-Primary: **PostgreSQL (OLTP)**. Có thể dùng Redis cho short-lived session/token deny-list nếu cần, nhưng Redis không sở hữu identity data.
+1. Customer đăng ký/đăng nhập qua `auth-service`; driver gửi OTP, xác minh rồi nộp hồ sơ và phương tiện.
+2. Operator/Admin duyệt hồ sơ qua `driver-service`; driver được duyệt mới chuyển sang `available`.
+3. Customer xem ước tính và tạo ride qua `booking-service`. Ride chuyển sang `searching`.
+4. Booking service yêu cầu driver-service tìm candidate phù hợp, ưu tiên khoảng cách; gửi offer theo thứ tự qua Socket.IO. Mỗi offer timeout mặc định 30 giây, tối đa 5 candidate.
+5. Driver nhận offer. Accept phải atomic: một ride chỉ gán một driver. Ride chuyển sang `accepted`; driver chuyển `busy`.
+6. Driver cập nhật tuần tự `driver_arrived` → `in_progress` → `completed`, đồng thời gửi GPS. Customer theo dõi qua API/Socket.IO.
+7. Khi ride hoàn tất, booking service phát `RideCompleted`. Payment service lấy pricing hiện hành, tạo fare/payment. Thanh toán điện tử hoàn tất qua callback có chữ ký; tiền mặt do driver xác nhận.
+8. Sau payment `COMPLETED`, customer gửi rating. Review service tạo một review cho mỗi ride và cập nhật rating/projection lịch sử.
+9. Notification, admin/reporting projections và audit xử lý event độc lập. Lỗi gửi email không rollback ride hoặc payment.
 
-## 11. Giải thích về lý do kỹ thuật
+### 2.3 Ngôn ngữ nghiệp vụ và aggregate
 
-Identity có quan hệ nhiều-nhiều giữa account–role–permission, cần transaction/unique constraint và consistency cao. PostgreSQL phù hợp cho ACID, index và auditability. JWT nên được xác thực stateless; refresh token vẫn cần persistence/revocation.
+| Context | Aggregate root | Invariant quan trọng |
+|---|---|---|
+| Identity & Account | `UserAccount` | Email/phone duy nhất; password luôn hash; tài khoản inactive không đăng nhập |
+| Driver & Fleet | `DriverProfile`, `Vehicle` | Chỉ tài xế approved/active mới online; plate/license duy nhất; Busy không nhận offer mới |
+| Booking, Dispatch & Trip | `Ride` | Chuyển trạng thái hợp lệ; chỉ một driver accept; retry tối đa 5; ownership theo customer/driver |
+| Fare & Payment | `Payment`, `PricingConfig` | Payment gắn duy nhất một ride; tiền thẻ không lưu; callback/idempotency không xử lý giao dịch hai lần |
+| Review & History | `RatingReview`, history projection | Ride đã completed và payment completed; một review mỗi ride; history là projection |
+| Notification | `Notification` | Người dùng chỉ đọc/cập nhật thông báo của mình; delivery retry không tạo bản ghi trùng |
+| Administration & Audit | `AuditLog`, report projection | Audit append-only; intervention đi qua domain owner và ghi actor/reason |
 
-## 12. Domain Events
+`CustomerId`, `DriverId`, `RideId`, `PaymentId` là ID tham chiếu giữa context, không phải shared entity hay quan hệ database cross-service.
 
-`AccountRegistered`, `AccountAuthenticated`, `RoleChanged`, `AccountDeactivated`.
+## 3. Service contracts
 
-# BC02 – Customer Profile / `customer-service`
+Tất cả public API đi qua Gateway với base URL `http://localhost:3000/api/v1`. Các bảng liệt kê route public hiện có; không tạo endpoint public trùng tên nhưng khác nghĩa. Chi tiết request/response nằm trong `api-docs/`.
 
-## 1. Mục đích của BC
+### 3.1 Auth service
 
-Quản lý business profile của khách hàng: thông tin cá nhân, contact information và trạng thái hồ sơ. Authentication thuộc Identity & Access.
+| API | FR | Ghi chú |
+|---|---|---|
+| `POST /auth/register/customer` | FR-AUTH-01 | Tạo customer account |
+| `POST /auth/driver-otp/request` | FR-AUTH-02 | Gửi OTP có rate limit; không trả OTP trong môi trường production |
+| `POST /auth/driver-otp/verify` | FR-AUTH-02 | Trả verification token ngắn hạn |
+| `POST /auth/register/driver` | FR-AUTH-02 | Yêu cầu verification token, hồ sơ và vehicle |
+| `POST /auth/login`, `POST /auth/logout` | FR-AUTH-03, FR-AUTH-06 | JWT và thu hồi refresh session |
+| `PATCH /auth/profile`, `PUT /auth/password` | FR-AUTH-04, FR-AUTH-05 | Profile/password của user hiện tại |
+| `GET /customers/{customerId}` | FR-AUTH-04 | Owner hoặc role quản trị được phép xem |
 
-## 2. FR liên quan
+### 3.2 Driver service
 
-| Thành phần | Mapping |
+| API | FR | Ghi chú |
+|---|---|---|
+| `GET /drivers/{driverId}` | FR-DRV-05 | Trả thông tin hiển thị và xe, không trả giấy tờ riêng tư |
+| `GET/POST /drivers/me/vehicles` | FR-DRV-01 | Danh sách/thêm xe của tài xế hiện tại |
+| `PUT /drivers/me/status` | FR-DRV-02, FR-DRV-03 | Chỉ `offline`/`available` do driver yêu cầu; Busy do hệ thống quản lý |
+| `PUT /drivers/me/location` | FR-TRACK-01 | Nhận GPS; tần suất mục tiêu 5–10 giây |
+| `GET /drivers/nearby` | FR-MATCH-01 | Lat/lng, radiusKm, status, page, limit; yêu cầu đăng nhập và kiểm tra role |
+| `PUT /admin/drivers/{driverId}/approval` | FR-DRV-04 | Operator/Admin duyệt/từ chối; ghi audit |
+| `PUT /admin/drivers/{driverId}/suspension` | FR-DRV-06 | Admin khóa/mở tài xế |
+
+### 3.3 Booking service (Booking + Matching + Trip lifecycle)
+
+| API | FR | Ghi chú |
+|---|---|---|
+| `POST /rides/estimate` | FR-RIDE-01, FR-RIDE-02 | Route, duration và fare estimates |
+| `POST /rides` | FR-RIDE-03 | Tạo ride và khởi động matching |
+| `GET /rides`, `GET /rides/{rideId}` | FR-RIDE-09 | Lịch sử cá nhân và chi tiết có kiểm tra quyền |
+| `GET /customers/me/bookings` | FR-RIDE-09 | Booking list có pagination |
+| `GET /rides/{rideId}/offers` | FR-MATCH-03 | Driver xem offer đang chờ của mình |
+| `POST /rides/{rideId}/offers/accept`, `/decline` | FR-MATCH-04, FR-MATCH-05 | Accept atomic; decline khởi chạy candidate kế tiếp |
+| `GET /rides/{rideId}/matching` | FR-MATCH-06 | Trạng thái matching, retryCount, deadline |
+| `PUT /rides/{rideId}/status` | FR-RIDE-04 → FR-RIDE-06 | Chỉ cho phép transition tuần tự |
+| `POST /rides/{rideId}/cancel` | FR-RIDE-07, FR-RIDE-08 | Policy hủy, lưu actor/reason và thông báo |
+| `GET /rides/{rideId}/location` | FR-TRACK-02, FR-TRACK-03 | Customer của ride xem vị trí/ETA |
+
+### 3.4 Payment service
+
+| API | FR | Ghi chú |
+|---|---|---|
+| `GET/PUT /admin/pricing` | FR-PAY-02 | Admin-only; ghi audit khi cập nhật |
+| `GET /rides/{rideId}/payment` | FR-PAY-01, FR-PAY-07 | Breakdown và trạng thái |
+| `POST /rides/{rideId}/payment/checkout` | FR-PAY-05, FR-PAY-06 | Bắt buộc `Idempotency-Key`; chỉ nhận opaque payment token |
+| `POST /rides/{rideId}/payment/cash-confirmation` | FR-PAY-03, FR-PAY-04 | Chỉ driver được gán xác nhận tiền mặt |
+| `POST /payments/{paymentId}/callback` | FR-PAY-05, FR-PAY-06 | Xác minh provider signature/timestamp và chống replay |
+
+### 3.5 Review, Notification, Administration services
+
+| Service | API chính | FR chính |
+|---|---|---|
+| `review-service` | `POST /rides/{rideId}/rating`, `GET /drivers/{driverId}/ratings` | FR-RATE-01 → FR-RATE-03 |
+| `notification-service` | `GET /notifications`, `POST /notifications/read-all`, `PUT /notifications/{notificationId}/read`; Socket.IO delivery | FR-NOTIF-01 → FR-NOTIF-05 |
+| `admin-service` | `/admin/dashboard`, `/admin/customers`, `/admin/drivers`, `/admin/rides`, `/admin/payments`, `/admin/reports/*`, `/admin/audit-logs`, `/health*` | FR-ADM-01 → FR-ADM-08, FR-SEC-03 → FR-SEC-05 |
+
+`/health`, `/health/db`, `/ready`, `/health/services` được expose qua Gateway. Health endpoints không yêu cầu JWT ở local nhưng không trả secret, connection string hay stack trace.
+
+## 4. Data ownership và persistence
+
+MVP thống nhất MongoDB như SRS. Tách database hoặc ít nhất tách collection/user credentials theo service; không coi một MongoDB cluster là một database dùng chung. Một service không được gọi `db.collection` của service khác.
+
+| Service | MongoDB data | Ghi chú |
+|---|---|---|
+| Auth | `users`, `refresh_tokens`, `otp_verifications` | Hash password; OTP lưu hash, TTL và giới hạn lần thử |
+| Driver | `driver_profiles`, `vehicles`, `driver_locations` | `currentLocation` GeoJSON Point có 2dsphere index |
+| Booking | `rides`, `ride_offers`, `processed_events` | Ride aggregate giữ state/offer state; state transition có optimistic concurrency |
+| Payment | `pricing_configs`, `payments`, `idempotency_records`, `processed_events` | Unique payment theo ride; idempotency theo actor/operation/key |
+| Review | `rating_reviews`, `trip_history`, `processed_events` | Unique `rideId` cho rating; history rebuild được từ events |
+| Notification | `notifications`, `notification_deliveries`, `processed_events` | Index `(userId, isRead, createdAt)` |
+| Admin | `audit_logs`, `admin_projections`, `processed_events` | Audit append-only; projection có thể rebuild |
+
+Mỗi service tạo unique/compound/TTL/geospatial index thuộc dữ liệu nó sở hữu. Không thiết kế MongoDB foreign key giả; service giữ ID và xác minh quyền qua API/event phù hợp.
+
+## 5. Giao tiếp đồng bộ và bất đồng bộ
+
+### 5.1 HTTP/REST
+
+Dùng cho thao tác cần kết quả tức thời: Gateway → service; booking → driver search; payment → pricing/fare; admin → domain command. Internal service endpoints chỉ bind private Docker network. Timeout phải hữu hạn và lỗi upstream được map thành lỗi API ổn định.
+
+### 5.2 RabbitMQ integration events
+
+Dùng topic exchange `cab.events` với routing key có version, ví dụ `booking.ride-created.v1`. Envelope tối thiểu:
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "RideCreated",
+  "version": 1,
+  "occurredAt": "2026-09-30T10:00:00Z",
+  "producer": "booking-service",
+  "aggregateId": "ride-id",
+  "correlationId": "request-or-workflow-id",
+  "payload": {}
+}
+```
+
+| Event | Producer | Consumer ví dụ |
+|---|---|---|
+| `CustomerRegistered.v1` | Auth | Notification, Admin projection |
+| `DriverApplicationSubmitted.v1` | Auth | Driver, Notification, Admin projection |
+| `DriverApproved.v1`, `DriverAvailabilityChanged.v1`, `DriverLocationUpdated.v1` | Driver | Booking, Notification, Admin projection |
+| `RideCreated.v1`, `RideAssigned.v1`, `RideStatusChanged.v1`, `RideCancelled.v1`, `RideCompleted.v1` | Booking | Driver, Payment, Review, Notification, Admin projection |
+| `PaymentCompleted.v1`, `PaymentFailed.v1` | Payment | Review eligibility, Notification, Admin projection |
+| `RatingSubmitted.v1` | Review | Driver rating projection, Notification, Admin/reporting projection |
+| `AuditRecorded.v1` | Domain services/Admin | Admin audit store, monitoring |
+
+Publisher dùng Outbox pattern hoặc cơ chế tương đương để không commit dữ liệu mà mất event. Consumer phải idempotent theo `eventId`, retry hữu hạn, chuyển message poison vào dead-letter queue và ghi correlation ID. Event chỉ chứa dữ liệu tối thiểu; tuyệt đối không gửi password, OTP plaintext, PAN/CVV hoặc JWT.
+
+### 5.3 Saga cho booking-to-payment
+
+Booking/Dispatch/Trip nằm cùng booking service ở MVP nên lifecycle chuyến không cần distributed saga giữa ba service. Luồng payment là saga bất đồng bộ: `RideCompleted` → Payment tạo pending → provider callback → `PaymentCompleted/Failed`. Payment failure không đưa ride về trạng thái chưa hoàn tất; cho phép retry hoặc cash fallback theo SRS. Timeout/retry cần idempotency key.
+
+## 6. API Gateway, bảo mật và quan sát
+
+Gateway là ingress duy nhất từ client. Nó xác thực JWT signature/issuer/audience/expiry, giới hạn kích thước payload, rate limit, gắn `X-Correlation-ID`, route theo `/api/v1` và không phát lộ service host. Domain service vẫn kiểm tra role và resource ownership để chống IDOR; không tin role/user ID do client tự gửi.
+
+- Password hash bằng bcrypt hoặc Argon2id; không log password/token/OTP.
+- Dữ liệu nhạy cảm cần đọc lại được mã hóa at rest bằng authenticated encryption; key không nằm cùng DB/repository và phải hỗ trợ xoay key. Hash password không phải encryption.
+- MongoDB query phải dùng ODM/allowlist an toàn, reject operator injection; mọi text output được escape để ngăn XSS.
+- Checkout bắt buộc `Idempotency-Key`; provider callback kiểm tra HMAC/signature, timestamp và transaction ID. Key lặp payload khác trả 409; cùng payload trả response lưu trước đó.
+- Rate limit theo user/IP; vượt ngưỡng trả 429 và `Retry-After`.
+- Log JSON có `service`, `requestId`, `correlationId`, `userId` (nếu phù hợp), latency và error code; loại bỏ PII không cần thiết.
+- `/health` là liveness; `/ready` xác nhận dependency bắt buộc; `/health/services` tổng hợp trạng thái service. Unhealthy dependency trả 503 nhưng response không chứa secret.
+
+## 7. Docker Compose và triển khai local
+
+Compose tối thiểu gồm `api-gateway`, bảy service backend ở bảng ownership, `mongodb`, `rabbitmq`; ba web app có thể chạy bằng profile riêng. Chỉ Gateway publish API port ra host. MongoDB, RabbitMQ và các service backend nằm trong private network. MongoDB dùng named volume; service có healthcheck/restart policy và chỉ start traffic khi dependency cần thiết healthy.
+
+Biến môi trường thật nằm ngoài Git. `.gitignore` loại `.env`, `.env.*` trừ `.env.example`, log, build và dependency output. `.env.example` chỉ chứa placeholder. JWT signing key, Mongo credentials, Rabbit credentials và provider secrets không được ghi vào compose hoặc source code dạng plaintext.
+
+Kiểm tra local theo thứ tự:
+
+1. `docker compose up --build` – build/start stack.
+2. `docker compose ps` – xem container và health status.
+3. Gọi qua Gateway: `GET /health`, `/ready`, `/health/services`.
+4. Xác nhận gọi trực tiếp port service từ host không được expose.
+5. Chạy Postman smoke flow: customer register/login → driver OTP/application/approval/online → booking/offer/ride → payment callback → review.
+
+## 8. Quy ước trạng thái và lưu ý triển khai
+
+- Public ride status dùng các giá trị trong SRS/API: `requested`, `searching`, `accepted`, `driver_arrived`, `in_progress`, `completed`, `cancelled`/cancellation actor, `no_driver`. API cancellation phải ánh xạ thành `CANCELED` nếu cần theo phiếu chấm; lưu riêng `cancelledBy` và `cancelReason`.
+- Driver public availability: `offline`, `available`, `busy`, `suspended`. Client chỉ yêu cầu offline/available; system sở hữu chuyển busy/available khi assign/end/cancel.
+- Vehicle type: `sedan`, `suv`, `van`; payment status: `PENDING`, `COMPLETED`, `FAILED`, `REFUNDED`.
+- MongoDB là persistence MVP; PostgreSQL, Redis Geo, Kafka, ClickHouse và search engine không phải dependency bắt buộc trong phiên bản này.
+- Socket.IO cung cấp realtime; RabbitMQ vận chuyển integration events. Hai cơ chế này có mục đích khác nhau, không thay thế nhau.
+- Bounded context là ranh giới domain logic; không bắt buộc mỗi subdomain nhỏ thành một process/service riêng. Tách service mới chỉ khi có lý do về ownership, scale, reliability hoặc team boundary.
+
+## 9. Đối chiếu với yêu cầu
+
+| Yêu cầu | Thiết kế đáp ứng |
 |---|---|
-| **Functional Requirements** | FR-CM-01, FR-CM-03, FR-CM-04 |
-| **Use Cases** | UC01, UC03, UC18 |
-| **Business Process / Workflow** | BP01 – Customer Registration & Profile; hỗ trợ BP05 – Rating & Trip History |
-
-## 3. Workflow
-
-Account đăng ký → tạo Customer Profile → cập nhật contact/profile → customer dùng `CustomerId` khi tạo Booking → Operations tra cứu profile.
-
-## 4. Ubiquitous Language
-
-`Customer`, `CustomerProfile`, `ContactInfo`, `CustomerStatus`, `CustomerId`.
-
-## 5. Aggregate
-
-**Customer Aggregate** – Root: `CustomerProfile`. Invariant: profile có identity ổn định; cập nhật profile phải được authorize; không nhúng Booking/Payment/Trip vào aggregate.
-
-## 6. Microservice
-
-`customer-service` – API/application layer độc lập, sở hữu hoàn toàn customer profile data. Các service khác chỉ giữ `CustomerId` hoặc nhận projection cần thiết.
-
-**Service name:** `customer-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/api/v1/customers` | Tạo customer profile |
-| GET | `/api/v1/customers/{customerId}` | Xem profile |
-| PUT | `/api/v1/customers/{customerId}` | Cập nhật profile |
-| PATCH | `/api/v1/customers/{customerId}/status` | Cập nhật trạng thái |
-| GET | `/api/v1/customers/{customerId}/summary` | Customer summary |
-
-## 8. Database
-
-`customer_db` – `customer_profiles`, `customer_contacts`; `account_id` là external reference tới Identity.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    CUSTOMER_PROFILES ||--o| CUSTOMER_CONTACTS : has
-
-    CUSTOMER_PROFILES {
-        uuid customer_id PK
-        uuid account_id
-        string full_name
-        string status
-        datetime created_at
-        datetime updated_at
-    }
-    CUSTOMER_CONTACTS {
-        uuid id PK
-        uuid customer_id FK
-        string phone
-        string email
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL (OLTP)**.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Profile có cấu trúc rõ, transaction đơn giản và yêu cầu uniqueness/index theo contact. Relational DB giúp enforce constraint mà không cần distributed transaction.
-
-## 12. Domain Events
-
-`CustomerProfileCreated`, `CustomerProfileUpdated`, `CustomerDeactivated`.
-
-# BC03 – Driver & Fleet / `driver-fleet-service`
-
-## 1. Mục đích của BC
-
-Quản lý hồ sơ tài xế, phương tiện, availability và vị trí hiện tại ở góc nhìn fleet. Đây là nguồn dữ liệu authoritative cho “driver có sẵn sàng nhận chuyến hay không?”.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-DM-01 → FR-DM-04 |
-| **Use Cases** | UC13, UC14 |
-| **Business Process / Workflow** | BP06 – Driver & Fleet Administration; cung cấp dữ liệu cho BP02, BP03, BP07 |
-
-## 3. Workflow
-
-Tạo/duyệt driver → đăng ký vehicle → driver chuyển Ready/Unavailable → cập nhật live location → Dispatch lấy candidate snapshot → Operations giám sát.
-
-## 4. Ubiquitous Language
-
-`Driver`, `DriverProfile`, `Availability`, `Ready`, `Unavailable`, `Vehicle`, `VehicleType`, `LiveLocationSnapshot`, `Fleet`.
-
-## 5. Aggregate
-
-**Driver Aggregate** và **Vehicle Aggregate**. Driver bảo vệ availability/profile; Vehicle bảo vệ plate/type/status. Không dùng Driver entity trực tiếp trong Dispatch.
-
-## 6. Microservice
-
-`driver-fleet-service` – authoritative service cho driver/vehicle. Live location có thể tách đường ghi tốc độ cao khỏi transactional profile path.
-
-**Service name:** `driver-fleet-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/api/v1/drivers` | Tạo driver |
-| GET | `/api/v1/drivers/{driverId}` | Xem driver |
-| PUT | `/api/v1/drivers/{driverId}` | Cập nhật driver |
-| GET | `/api/v1/drivers` | Tra cứu/lọc driver |
-| PATCH | `/api/v1/drivers/{driverId}/availability` | Ready/Unavailable |
-| POST | `/api/v1/drivers/{driverId}/vehicles` | Thêm vehicle |
-| GET | `/api/v1/drivers/{driverId}/vehicles` | Danh sách vehicle |
-| PUT | `/api/v1/vehicles/{vehicleId}` | Cập nhật vehicle |
-| PATCH | `/api/v1/drivers/{driverId}/location` | Cập nhật location |
-
-## 8. Database
-
-`driver_fleet_db` – PostgreSQL cho driver/vehicle/availability; Redis có thể làm geo/cache layer cho location, nhưng PostgreSQL vẫn giữ business ownership.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    DRIVERS ||--o{ VEHICLES : owns
-    DRIVERS ||--|| DRIVER_AVAILABILITY : has
-    DRIVERS ||--o{ DRIVER_LOCATION_SNAPSHOTS : reports
-
-    DRIVERS {
-        uuid driver_id PK
-        uuid account_id
-        string license_no UK
-        string full_name
-        string status
-        datetime created_at
-    }
-    VEHICLES {
-        uuid vehicle_id PK
-        uuid driver_id FK
-        string plate_no UK
-        string vehicle_type
-        string status
-    }
-    DRIVER_AVAILABILITY {
-        uuid driver_id PK, FK
-        string status
-        datetime changed_at
-    }
-    DRIVER_LOCATION_SNAPSHOTS {
-        uuid id PK
-        uuid driver_id FK
-        decimal latitude
-        decimal longitude
-        datetime captured_at
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL**; auxiliary: **Redis GEO/TTL** cho live location/availability cache nếu tải cao.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Driver/Vehicle có quan hệ relational và invariant (license/plate uniqueness) nên cần OLTP. Location thay đổi với tần suất rất cao, nên Redis GEO/TTL giúp giảm write pressure; dữ liệu operational hiện thời vẫn phải có nguồn authoritative rõ ràng.
-
-## 12. Domain Events
-
-`DriverCreated`, `DriverAvailabilityChanged`, `VehicleRegistered`, `VehicleStatusChanged`, `DriverLocationUpdated`.
-
-# BC04 – Booking / `booking-service`
-
-## 1. Mục đích của BC
-
-Core Domain tạo và quản lý yêu cầu đặt xe từ lúc khách gửi pickup/destination/vehicle type đến khi booking được dispatch, assigned, cancelled, completed hoặc no-driver-found.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-BK-01 → FR-BK-05 |
-| **Use Cases** | UC04 |
-| **Business Process / Workflow** | BP02 – Booking & Driver Assignment |
-
-## 3. Workflow
-
-Validate request → tạo Booking → `SearchingDriver` → phát `BookingReadyForDispatch` → nhận `DriverAssigned`/`NoDriverFound` → cập nhật booking lifecycle → phản ánh completion/cancellation.
-
-## 4. Ubiquitous Language
-
-`Booking`, `BookingRequest`, `PickupLocation`, `Destination`, `VehicleType`, `BookingStatus`, `SearchingDriver`, `DriverAssigned`, `NoDriverFound`, `Cancelled`, `Completed`.
-
-## 5. Aggregate
-
-**Booking Aggregate** – Root: `Booking`. Invariant: pickup + destination + vehicle type hợp lệ; state transition hợp lệ; không xác nhận assignment kép trong cùng booking.
-
-## 6. Microservice
-
-`booking-service` – Core microservice, source of truth cho booking lifecycle. Không chọn driver, không tính fare, không xử lý payment.
-
-**Service name:** `booking-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/api/v1/bookings` | Tạo booking |
-| GET | `/api/v1/bookings/{bookingId}` | Xem booking |
-| GET | `/api/v1/bookings?customerId=...` | Lọc theo customer |
-| PATCH | `/api/v1/bookings/{bookingId}/status` | Cập nhật trạng thái hợp lệ |
-| POST | `/api/v1/bookings/{bookingId}/cancel` | Hủy booking |
-| GET | `/api/v1/bookings/{bookingId}/status` | Theo dõi trạng thái |
-
-## 8. Database
-
-`booking_db` – `bookings`, `booking_status_history`; chỉ lưu `customer_id`/`driver_id`/`trip_id` dưới dạng external references.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    BOOKINGS ||--o{ BOOKING_STATUS_HISTORY : has
-
-    BOOKINGS {
-        uuid booking_id PK
-        uuid customer_id
-        string pickup_address
-        decimal pickup_latitude
-        decimal pickup_longitude
-        string destination_address
-        decimal destination_latitude
-        decimal destination_longitude
-        string vehicle_type
-        string status
-        datetime created_at
-        datetime updated_at
-    }
-    BOOKING_STATUS_HISTORY {
-        uuid id PK
-        uuid booking_id FK
-        string from_status
-        string to_status
-        string reason
-        datetime changed_at
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL (OLTP)**.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Booking là transaction-centric và có state machine cần atomic update + optimistic locking. PostgreSQL hỗ trợ unique/index/transaction tốt và phù hợp với audit trạng thái.
-
-## 12. Domain Events
-
-`BookingCreated`, `BookingReadyForDispatch`, `BookingStatusChanged`, `DriverAssigned`, `NoDriverFound`, `BookingCancelled`, `BookingCompleted`.
-
-# BC05 – Dispatch & Matching / `dispatch-service`
-
-## 1. Mục đích của BC
-
-Core Domain quyết định candidate nào đủ điều kiện, thứ tự ưu tiên, gửi offer, xử lý accept/reject/timeout và xác nhận assignment. Đây là nơi sở hữu matching policy.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-MA-01 → FR-MA-06 |
-| **Use Cases** | UC05, UC06 |
-| **Business Process / Workflow** | BP02 – Booking & Driver Assignment |
-
-## 3. Workflow
-
-Nhận dispatch request → lấy candidate snapshot → evaluate eligibility → rank theo MatchingPolicy → gửi DriverOffer → accept/reject/timeout → thử candidate tiếp theo → confirm Assignment hoặc NoMatch.
-
-## 4. Ubiquitous Language
-
-`DispatchRequest`, `CandidateDriver`, `MatchingCriteria`, `Eligibility`, `RankingPolicy`, `DriverOffer`, `DispatchAttempt`, `OfferTimeout`, `Assignment`, `NoMatch`.
-
-## 5. Aggregate
-
-**Dispatch Aggregate** – Root: `DispatchRequest`. Bảo vệ invariant một booking chỉ có một assignment; offer/attempt chuyển state theo policy. `MatchingPolicy` là Domain Service/Strategy.
-
-## 6. Microservice
-
-`dispatch-service` – Core microservice, cần xử lý concurrent offers và idempotent acceptance. Không sở hữu Driver Profile; chỉ giữ candidate snapshot/reference.
-
-**Service name:** `dispatch-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/api/v1/dispatch` | Bắt đầu dispatch |
-| GET | `/api/v1/dispatch/{dispatchId}` | Xem dispatch |
-| POST | `/api/v1/dispatch/{dispatchId}/offers` | Tạo driver offer |
-| POST | `/api/v1/dispatch/offers/{offerId}/accept` | Accept offer |
-| POST | `/api/v1/dispatch/offers/{offerId}/reject` | Reject offer |
-| POST | `/api/v1/dispatch/offers/{offerId}/expire` | Expire offer |
-| POST | `/api/v1/dispatch/{dispatchId}/reassign` | Thử candidate tiếp theo |
-
-## 8. Database
-
-`dispatch_db` – dispatch_requests, attempts, offers, assignments. Redis có thể giữ candidate set/offer TTL, nhưng assignment authoritative nằm ở PostgreSQL.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    ASSIGNMENTS ||--o{ ASSIGNMENT_OFFERS : creates
-
-    ASSIGNMENTS {
-        uuid assignment_id PK
-        uuid booking_id
-        uuid confirmed_driver_id
-        uuid confirmed_vehicle_id
-        string status
-        datetime started_at
-        datetime confirmed_at
-    }
-    ASSIGNMENT_OFFERS {
-        uuid offer_id PK
-        uuid assignment_id FK
-        uuid driver_id
-        string status
-        int attempt_no
-        datetime sent_at
-        datetime responded_at
-        datetime expires_at
-    }
-    MATCHING_POLICIES {
-        uuid policy_id PK
-        string version UK
-        string status
-        json rules_json
-        datetime effective_from
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL**; auxiliary: **Redis** cho ephemeral offer TTL, lock và candidate cache; có thể dùng PostGIS/geo index hoặc location cache tùy quy mô.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Matching có stateful workflow và concurrent race (hai driver accept cùng lúc), nên assignment cần ACID/locking. Redis rất hữu ích cho dữ liệu tạm thời và TTL nhưng không nên là source of truth cho assignment.
-
-## 12. Domain Events
-
-`DispatchStarted`, `DriverCandidateSelected`, `DriverOfferSent`, `DriverOfferAccepted`, `DriverOfferRejected`, `DriverOfferExpired`, `DriverAssigned`, `NoDriverAvailable`.
-
-# BC06 – Trip Execution & Tracking / `trip-service`
-
-## 1. Mục đích của BC
-
-Quản lý chuyến thực tế sau assignment: tạo Trip, state machine Accepted → ArrivedAtPickup → PassengerOnboard → InTransit → Completed và các location samples/incident liên quan.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-TR-01 → FR-TR-05 |
-| **Use Cases** | UC07, UC08 |
-| **Business Process / Workflow** | BP03 – Trip Execution & Tracking; hỗ trợ BP07 |
-
-## 3. Workflow
-
-AssignmentConfirmed → tạo Trip → driver tới pickup → xác nhận onboard → bắt đầu trip → gửi location samples → complete → phát `TripCompleted` cho Pricing/History/Reporting.
-
-## 4. Ubiquitous Language
-
-`Trip`, `AssignmentRef`, `TripDriver`, `TripState`, `ArrivedAtPickup`, `PassengerOnboard`, `InTransit`, `Completed`, `TripLocationSample`.
-
-## 5. Aggregate
-
-**Trip Aggregate** – Root: `Trip`. Invariant: chỉ tạo sau AssignmentConfirmed; chỉ assigned driver update state; không bỏ qua state nếu policy không cho phép; completion là tiền đề cho fare.
-
-## 6. Microservice
-
-`trip-service` – Core microservice, authoritative cho trip lifecycle. Location tracking là write-heavy path, có thể tách ingestion nhưng domain ownership vẫn ở Trip BC.
-
-**Service name:** `trip-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/api/v1/trips/from-assignment` | Tạo trip từ assignment |
-| GET | `/api/v1/trips/{tripId}` | Xem trip |
-| PATCH | `/api/v1/trips/{tripId}/state` | Chuyển state |
-| POST | `/api/v1/trips/{tripId}/locations` | Ghi location sample |
-| POST | `/api/v1/trips/{tripId}/complete` | Hoàn thành trip |
-| GET | `/api/v1/trips/{tripId}/tracking` | Theo dõi trip |
-
-## 8. Database
-
-`trip_db` – trips, trip_state_history, trip_location_samples/summary. Có thể dùng PostGIS hoặc time-series extension cho location tùy tải.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    TRIPS ||--o{ TRIP_STATUS_HISTORY : has
-    TRIPS ||--o{ TRIP_LOCATIONS : records
-
-    TRIPS {
-        uuid trip_id PK
-        uuid booking_id
-        uuid assignment_id
-        uuid driver_id
-        uuid vehicle_id
-        string state
-        datetime started_at
-        datetime completed_at
-    }
-    TRIP_STATUS_HISTORY {
-        uuid id PK
-        uuid trip_id FK
-        string from_state
-        string to_state
-        string actor_type
-        uuid actor_id
-        datetime changed_at
-    }
-    TRIP_LOCATIONS {
-        uuid id PK
-        uuid trip_id FK
-        uuid driver_id
-        decimal latitude
-        decimal longitude
-        datetime captured_at
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL + PostGIS** (hoặc PostgreSQL + time-series extension); auxiliary: Redis/stream để buffer location nếu cần.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Trip state transition cần transaction và invariant chặt, nên dùng relational OLTP. Location là time-series/geospatial workload; PostGIS và partitioning giúp truy vấn theo trip/time/location hiệu quả hơn bảng OLTP thuần túy.
-
-## 12. Domain Events
-
-`TripCreated`, `DriverArrivedAtPickup`, `PassengerPickedUp`, `TripStarted`, `TripLocationUpdated`, `TripCompleted`, `TripInterrupted`.
-
-# BC07 – Pricing & Fare / `pricing-service`
-
-## 1. Mục đích của BC
-
-Tính và finalize fare dựa trên trip facts và pricing policy. Công thức chi tiết chưa được coi là hard-coded nếu SRS chưa chốt.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-PM-01 |
-| **Use Cases** | UC09 |
-| **Business Process / Workflow** | BP04 – Fare & Payment |
-
-## 3. Workflow
-
-Nhận `TripCompleted` → load PricingPolicy → calculate FareComponents → tạo FareCalculation → validate → `FareFinalized` → Payment consume result.
-
-## 4. Ubiquitous Language
-
-`Fare`, `FareRule`, `PricingPolicy`, `FareComponent`, `FareCalculation`, `CalculatedAmount`, `FinalFare`, `Money`.
-
-## 5. Aggregate
-
-**Fare Calculation Aggregate** – Root: `FareCalculation`. `FareCalculator` là Domain Service; chính sách pricing phải có version để reproducibility của từng fare.
-
-## 6. Microservice
-
-`pricing-service` – microservice độc lập về pricing; không đọc trực tiếp Trip DB. Input là trip facts/snapshot đủ để tính giá.
-
-**Service name:** `pricing-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/api/v1/fares/calculate` | Tính fare |
-| GET | `/api/v1/fares/{fareId}` | Xem fare |
-| POST | `/api/v1/fares/{fareId}/finalize` | Finalize fare |
-| GET | `/api/v1/pricing-policies` | Tra cứu policy |
-| PUT | `/api/v1/pricing-policies/{id}` | Cập nhật policy |
-
-## 8. Database
-
-`pricing_db` – pricing_policies, pricing_rules, fare_calculations, fare_components; fare final là historical business record.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    FARES ||--o{ FARE_COMPONENTS : contains
-    PRICING_RULES ||--o{ FARES : applied_to
-
-    FARES {
-        uuid fare_id PK
-        uuid trip_id
-        decimal total_amount
-        string currency
-        string status
-        uuid pricing_rule_id
-        datetime finalized_at
-    }
-    FARE_COMPONENTS {
-        uuid id PK
-        uuid fare_id FK
-        string component_type
-        decimal amount
-        string description
-    }
-    PRICING_RULES {
-        uuid pricing_rule_id PK
-        string version UK
-        string status
-        json rule_json
-        datetime effective_from
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL (OLTP)**.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Fare cần precision, versioning và auditability. PostgreSQL/decimal giúp tránh floating-point money error, transaction tốt và giữ được policy version dùng để giải thích cách tính.
-
-## 12. Domain Events
-
-`FareCalculated`, `FareFinalized`, `FareCalculationFailed`.
-
-# BC08 – Payment / `payment-service`
-
-## 1. Mục đích của BC
-
-Quản lý payment transaction theo fare đã finalize, hỗ trợ Cash/Electronic, provider integration, callback, retry và trạng thái Success/Failed.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-PM-02 → FR-PM-06 |
-| **Use Cases** | UC10, UC17 |
-| **Business Process / Workflow** | BP04 – Fare & Payment; hỗ trợ BP07 – Operations Monitoring |
-
-## 3. Workflow
-
-Nhận FareFinalized → tạo Payment → chọn PaymentMethod → cash settlement hoặc gọi provider → nhận callback/result → cập nhật PaymentStatus → phát PaymentSucceeded/Failed.
-
-## 4. Ubiquitous Language
-
-`Payment`, `PaymentMethod`, `PaymentTransaction`, `PaymentStatus`, `PaymentAttempt`, `Provider`, `ProviderTransactionId`, `Settlement`.
-
-## 5. Aggregate
-
-**Payment Aggregate** – Root: `Payment`. Invariant: amount/currency nhất quán với FareFinalized; electronic chỉ success sau provider confirmation; retry phải idempotent theo payment/attempt key.
-
-## 6. Microservice
-
-`payment-service` – microservice chứa domain payment và adapter/provider ports. Không để provider model lọt vào domain model.
-
-**Service name:** `payment-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/api/v1/payments` | Tạo payment |
-| GET | `/api/v1/payments/{paymentId}` | Xem payment |
-| POST | `/api/v1/payments/{paymentId}/retry` | Retry payment |
-| POST | `/api/v1/payments/{paymentId}/confirm` | Confirm cash/provider result |
-| POST | `/api/v1/providers/{provider}/webhook` | Nhận provider callback |
-
-## 8. Database
-
-`payment_db` – payments, payment_attempts, provider_transactions, payment_status_history. Không lưu raw card secret/token nếu provider không yêu cầu.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    PAYMENTS ||--o{ PAYMENT_TRANSACTIONS : has
-
-    PAYMENTS {
-        uuid payment_id PK
-        uuid trip_id
-        uuid fare_id
-        decimal amount
-        string currency
-        string method
-        string status
-        datetime created_at
-        datetime completed_at
-    }
-    PAYMENT_TRANSACTIONS {
-        uuid transaction_id PK
-        uuid payment_id FK
-        string provider
-        string provider_transaction_id
-        string status
-        json provider_response
-        datetime processed_at
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL (OLTP)**; optional secure secret/token storage bên ngoài DB tùy provider.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Payment cần consistency, idempotency, unique provider transaction reference và traceability. PostgreSQL phù hợp cho transaction ledger; dữ liệu nhạy cảm nên giảm thiểu và/hoặc token hóa, không dùng payment DB như vault.
-
-## 12. Domain Events
-
-`PaymentRequested`, `PaymentSucceeded`, `PaymentFailed`, `PaymentProviderUnavailable`, `PaymentStatusChanged`.
-
-# BC09 – Notification / `notification-service`
-
-## 1. Mục đích của BC
-
-Nhận business events, tạo notification theo template/channel, gửi qua provider và quản lý delivery/retry. Notification không sở hữu business state của Booking/Trip/Payment.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-NT-01 → FR-NT-06 |
-| **Use Cases** | UC20 |
-| **Business Process / Workflow** | BP09 – Notification Delivery; hỗ trợ BP02, BP03, BP04 |
-
-## 3. Workflow
-
-Consume event → resolve recipient/channel/template → enqueue delivery → send → receive provider result → retry/fail → lưu delivery status.
-
-## 4. Ubiquitous Language
-
-`Notification`, `Recipient`, `Channel`, `Template`, `Delivery`, `DeliveryAttempt`, `Sent`, `Failed`, `Provider`.
-
-## 5. Aggregate
-
-**Notification Aggregate** – Root: `Notification`. Invariant: delivery failure không làm rollback core business transaction; retry phải idempotent theo message/delivery key.
-
-## 6. Microservice
-
-`notification-service` – asynchronous-first service. Public query API chỉ để tra cứu delivery/history; business event ingestion là luồng chính.
-
-**Service name:** `notification-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/api/v1/notifications` | Tạo notification |
-| GET | `/api/v1/notifications/{notificationId}` | Xem delivery |
-| GET | `/api/v1/notifications?recipientId=...` | Lịch sử notification |
-| POST | `/api/v1/providers/{provider}/webhook` | Provider callback |
-
-## 8. Database
-
-`notification_db` – notification_templates, notifications, delivery_attempts; queue/broker nằm ngoài transactional DB.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    NOTIFICATION_TEMPLATES ||--o{ NOTIFICATIONS : renders
-    NOTIFICATIONS ||--o{ DELIVERY_ATTEMPTS : attempts
-
-    NOTIFICATION_TEMPLATES {
-        uuid template_id PK
-        string event_type
-        string channel
-        string version
-        string content_template
-        string status
-    }
-    NOTIFICATIONS {
-        uuid notification_id PK
-        uuid recipient_id
-        string recipient_type
-        uuid template_id FK
-        string channel
-        string status
-        json payload
-        datetime created_at
-        datetime sent_at
-    }
-    DELIVERY_ATTEMPTS {
-        uuid attempt_id PK
-        uuid notification_id FK
-        string provider
-        string status
-        string provider_reference
-        datetime attempted_at
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL**; auxiliary: **Redis/RabbitMQ/Kafka** cho queue/retry tùy infrastructure.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Notification là I/O-bound và có retry/back-pressure. PostgreSQL lưu durable delivery state; message broker/queue tách tốc độ business transaction khỏi nhà cung cấp email/SMS/push.
-
-## 12. Domain Events
-
-Domain: `NotificationCreated`, `NotificationSent`, `NotificationFailed`; integration input: `BookingReadyForDispatch`, `DriverAssigned`, `TripCompleted`, `PaymentSucceeded`, `PaymentFailed`, `NoDriverFound`.
-
-# BC10 – Feedback & Trip History / `feedback-history-service`
-
-## 1. Mục đích của BC
-
-Quản lý rating và read model lịch sử chuyến. History là projection, không thay thế Trip/Payment source of truth.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-RH-01 → FR-RH-03 |
-| **Use Cases** | UC11, UC12 |
-| **Business Process / Workflow** | BP05 – Rating & Trip History |
-
-## 3. Workflow
-
-Consume TripCompleted/Fare/Payment events → build TripHistory projection → Customer xem history → customer đủ điều kiện submit Rating → lưu rating → phát event.
-
-## 4. Ubiquitous Language
-
-`Rating`, `RatingScore`, `RatingComment`, `CompletedTrip`, `TripHistory`, `RatingEligibility`, `ExperienceRecord`, `Snapshot`.
-
-## 5. Aggregate
-
-**Rating Aggregate** – Root: `Rating`. `TripHistory` là Read Model/Projection. Invariant: chỉ customer hợp lệ và trip completed mới được rating; uniqueness theo trip nếu policy là một rating/trip.
-
-## 6. Microservice
-
-`feedback-history-service` – kết hợp transactional rating với projection history. Query path tối ưu cho customer history.
-
-**Service name:** `feedback-history-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/api/v1/trips/{tripId}/ratings` | Submit rating |
-| GET | `/api/v1/trips/{tripId}/rating` | Xem rating |
-| GET | `/api/v1/customers/{customerId}/trip-history` | Lịch sử chuyến |
-| GET | `/api/v1/trip-history/{tripId}` | Chi tiết history |
-| GET | `/api/v1/customers/{customerId}/ratings` | Rating của customer |
-
-## 8. Database
-
-`feedback_history_db` – ratings + trip_history projection. Projection có thể rebuild từ event stream khi cần.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    TRIP_HISTORY ||--o| RATINGS : may_have
-
-    TRIP_HISTORY {
-        uuid history_id PK
-        uuid trip_id UK
-        uuid booking_id
-        uuid customer_id
-        uuid driver_id
-        string pickup_summary
-        string destination_summary
-        datetime completed_at
-        decimal fare_amount
-        string payment_method
-        string payment_status
-    }
-    RATINGS {
-        uuid rating_id PK
-        uuid trip_id UK
-        uuid customer_id
-        uuid driver_id
-        int score
-        string comment
-        datetime submitted_at
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL (OLTP + read model)**; có thể dùng Elasticsearch/OpenSearch nếu history search phức tạp, nhưng không cần cho MVP.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Rating cần ACID/unique constraint; history cần query theo customer/time. Một PostgreSQL read model vừa đủ cho quy mô đồ án; event-driven projection giúp tránh cross-service joins.
-
-## 12. Domain Events
-
-`RatingSubmitted`, `TripHistoryCreated`, `TripHistoryUpdated`.
-
-# BC11 – Operations / `operations-service`
-
-## 1. Mục đích của BC
-
-Cung cấp operational case, incident và intervention cho nhân viên vận hành. Operations điều phối/ra lệnh nhưng không sở hữu Customer/Driver/Trip/Payment state.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-OM-01 → FR-OM-07 |
-| **Use Cases** | UC15, UC16, UC17, UC18; hỗ trợ UC13/UC14 |
-| **Business Process / Workflow** | BP07 – Operations Monitoring & Incident Handling; hỗ trợ BP06 |
-
-## 3. Workflow
-
-Operator xem operational view → mở incident → investigate → gửi command tới context owner → ghi intervention → theo dõi resolution → đóng case và audit.
-
-## 4. Ubiquitous Language
-
-`OperationalCase`, `Incident`, `Severity`, `Intervention`, `OperationalAction`, `Escalation`, `Resolution`, `CaseStatus`.
-
-## 5. Aggregate
-
-**OperationCase Aggregate** – Root: `OperationalCase`. Các target như Trip/Driver/Payment chỉ là external references. Intervention phải gắn actor, reason và outcome.
-
-## 6. Microservice
-
-`operations-service` – microservice dành cho operator workflow, thường có read projections tổng hợp để dashboard không phải gọi tuần tự nhiều service.
-
-**Service name:** `operations-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| GET | `/api/v1/operations/trips/active` | Theo dõi trip |
-| GET | `/api/v1/operations/drivers/status` | Trạng thái driver |
-| GET | `/api/v1/operations/transactions` | Tra cứu transaction |
-| POST | `/api/v1/operations/incidents` | Tạo incident |
-| GET | `/api/v1/operations/incidents/{incidentId}` | Xem incident |
-| PATCH | `/api/v1/operations/incidents/{incidentId}` | Cập nhật incident |
-| POST | `/api/v1/operations/incidents/{incidentId}/actions` | Intervention |
-
-## 8. Database
-
-`operations_db` – incidents, operational_actions, assignments/escalations nếu cần. Read projections có thể denormalize.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    INCIDENTS ||--o{ OPERATIONAL_ACTIONS : has
-
-    INCIDENTS {
-        uuid incident_id PK
-        string incident_type
-        string severity
-        uuid trip_id
-        uuid driver_id
-        uuid customer_id
-        string status
-        string description
-        datetime opened_at
-        datetime resolved_at
-    }
-    OPERATIONAL_ACTIONS {
-        uuid action_id PK
-        uuid incident_id FK
-        uuid operator_id
-        string action_type
-        string result
-        json metadata
-        datetime executed_at
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL**; optional read cache Redis.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Operations cần transaction cho case/action và traceability. Read projections giúp dashboard phản hồi nhanh; command vẫn gửi đến domain owner để giữ invariant.
-
-## 12. Domain Events
-
-`OperationCaseOpened`, `OperationalInterventionPerformed`, `OperationCaseResolved`.
-
-# BC12 – Reporting & Monitoring / `reporting-service`
-
-## 1. Mục đích của BC
-
-Tính KPI và báo cáo từ integration events: trip volume, revenue, completion/cancellation rate, driver performance. Đây là read/analytics context.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-RP-01 → FR-RP-05 |
-| **Use Cases** | UC19 |
-| **Business Process / Workflow** | BP08 – Reporting & Business Monitoring |
-
-## 3. Workflow
-
-Consume events → chuẩn hóa facts → aggregate theo thời gian/driver → cập nhật metrics → expose dashboard/report API.
-
-## 4. Ubiquitous Language
-
-`TripFact`, `PaymentFact`, `DriverPerformance`, `RevenueMetric`, `CompletionRate`, `CancellationRate`, `ReportingPeriod`, `DailyMetric`.
-
-## 5. Aggregate
-
-Không dùng transactional aggregate cổ điển cho phần reporting. Domain concept chính là **Projection/Fact Model**; metric calculation là read-side/domain calculation.
-
-## 6. Microservice
-
-`reporting-service` – độc lập, event-driven, tối ưu read-heavy queries. Không query trực tiếp DB của Booking/Trip/Payment.
-
-**Service name:** `reporting-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| GET | `/api/v1/reports/trips` | Trip volume |
-| GET | `/api/v1/reports/revenue` | Revenue |
-| GET | `/api/v1/reports/completion-rate` | Completion rate |
-| GET | `/api/v1/reports/cancellation-rate` | Cancellation rate |
-| GET | `/api/v1/reports/driver-performance` | Driver performance |
-| GET | `/api/v1/reports/dashboard-summary` | Dashboard |
-
-## 8. Database
-
-`reporting_db` – fact/projection tables và daily metrics.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    REPORT_TRIP_FACT ||--o{ REPORT_DAILY_METRICS : contributes
-    REPORT_PAYMENT_FACT ||--o{ REPORT_DAILY_METRICS : contributes
-    REPORT_DRIVER_FACT ||--o{ REPORT_DAILY_METRICS : contributes
-
-    REPORT_TRIP_FACT {
-        uuid trip_id PK
-        uuid driver_id
-        uuid customer_id
-        string status
-        date trip_date
-        decimal fare_amount
-    }
-    REPORT_PAYMENT_FACT {
-        uuid payment_id PK
-        uuid trip_id
-        decimal amount
-        string method
-        string status
-        date payment_date
-    }
-    REPORT_DRIVER_FACT {
-        uuid driver_id PK
-        int completed_trips
-        int rejected_offers
-        int cancelled_trips
-        decimal average_rating
-        decimal completion_rate
-    }
-    REPORT_DAILY_METRICS {
-        date metric_date PK
-        int trip_count
-        decimal revenue
-        decimal completion_rate
-        decimal cancellation_rate
-    }
-```
-
-## 10. Database type
-
-MVP: **PostgreSQL read model**. Khi dữ liệu lớn: **ClickHouse/DWH** cho OLAP, vẫn giữ event contract upstream ổn định.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Reporting có workload aggregate/filter theo thời gian khác hẳn OLTP. PostgreSQL phù hợp MVP; OLAP engine như ClickHouse phù hợp volume lớn, scan nhiều rows và dashboard analytics.
-
-## 12. Domain Events
-
-Input: `BookingStatusChanged`, `TripCompleted`, `TripStateChanged`, `PaymentSucceeded`, `PaymentFailed`, `DriverCreated`, `RatingSubmitted`. Domain/report events: `DailyMetricsUpdated`, `ReportSnapshotGenerated`.
-
-# BC13 – Audit Trail / `audit-service`
-
-## 1. Mục đích của BC
-
-Lưu vết bất biến các critical actions/events cho security, operations và troubleshooting. Audit chỉ ghi nhận, không quyết định domain state.
-
-## 2. FR liên quan
-
-| Thành phần | Mapping |
-|---|---|
-| **Functional Requirements** | FR-AC-04 |
-| **Use Cases** | UC22 |
-| **Business Process / Workflow** | BP10 – Access Control & Audit |
-
-## 3. Workflow
-
-Service phát auditable event → audit ingestion → validate metadata → append log → query theo actor/target/trace → retention/archive.
-
-## 4. Ubiquitous Language
-
-`AuditEvent`, `Actor`, `Action`, `Target`, `CorrelationId`, `TraceId`, `Outcome`, `SourceService`, `OccurredAt`.
-
-## 5. Aggregate
-
-Audit không cần aggregate phức tạp. **AuditEntry** là append-only record. Invariant: entry sau khi ghi không được update/delete bởi business API thông thường.
-
-## 6. Microservice
-
-`audit-service` – write-heavy append-only microservice; query endpoint tách read concern khỏi ingestion.
-
-**Service name:** `audit-service`
-
-
-## 7. API chính
-
-| Method | Endpoint | Mục đích |
-|---|---|---|
-| POST | `/internal/audit-events` | Ghi audit event |
-| GET | `/api/v1/audit-logs` | Tra cứu audit |
-| GET | `/api/v1/audit-logs/{id}` | Chi tiết audit |
-| GET | `/api/v1/audit-logs?actorId=...` | Lọc theo actor |
-| GET | `/api/v1/audit-logs?targetId=...` | Lọc theo target |
-
-## 8. Database
-
-`audit_db` – audit_logs append-only; archive/retention có thể chuyển sang object storage theo policy.
-
-## 9. ERD
-
-```mermaid
-erDiagram
-    AUDIT_LOGS {
-        uuid audit_id PK
-        uuid actor_id
-        string actor_type
-        string source_service
-        string action
-        string target_type
-        string target_id
-        string outcome
-        string correlation_id
-        json metadata
-        datetime occurred_at
-    }
-```
-
-## 10. Database type
-
-Primary: **PostgreSQL append-only**; optional archive: object storage/WORM-compatible storage.
-
-## 11. Giải thích về lý do kỹ thuật
-
-Audit cần query theo actor/target/time và durability. PostgreSQL phù hợp cho MVP với index theo trace/time; khi volume rất lớn có thể partition theo thời gian và archive cold data.
-
-## 12. Domain Events
-
-Input/auditable events: `AccountAuthenticated`, `RoleChanged`, `DriverAvailabilityChanged`, `BookingCreated`, `DriverAssigned`, `TripStateChanged`, `PaymentStatusChanged`, `OperationalInterventionPerformed`.
----
-
-## 3. Quy tắc triển khai chung
-
-### 3.1. API Gateway
-
-```text
-Client → API Gateway → Microservice
-                  ├─ JWT validation / routing
-                  ├─ Rate limiting
-                  ├─ Correlation ID
-                  └─ Observability
-```
-
-### 3.2. Event contract
-
-```text
-Domain Event (inside BC)
-        ↓
-Outbox
-        ↓
-Integration Event (versioned)
-        ↓
-Message Broker
-        ↓
-Consumer services
-```
-
-Mỗi Integration Event nên có `eventId`, `eventType`, `version`, `occurredAt`, `aggregateId`, `correlationId` và payload tối thiểu. Consumer phải idempotent.
-
-### 3.3. Database ownership
-
-| Service | Primary DB | Auxiliary / Analytics |
-|---|---|---|
-| identity-service | PostgreSQL | Redis tùy chọn |
-| customer-service | PostgreSQL | – |
-| driver-fleet-service | PostgreSQL | Redis GEO/TTL |
-| booking-service | PostgreSQL | – |
-| dispatch-service | PostgreSQL | Redis / PostGIS tùy tải |
-| trip-service | PostgreSQL + PostGIS/time-series | Redis/stream |
-| pricing-service | PostgreSQL | – |
-| payment-service | PostgreSQL | Secret/token store tùy provider |
-| notification-service | PostgreSQL | RabbitMQ/Kafka/Redis |
-| feedback-history-service | PostgreSQL | Search engine tùy nhu cầu |
-| operations-service | PostgreSQL | Redis read cache |
-| reporting-service | PostgreSQL read model | ClickHouse/DWH khi scale |
-| audit-service | PostgreSQL append-only | Object/WORM archive |
-
-### 3.4. Core flow end-to-end
-
-```text
-1. Customer đăng nhập
-2. Booking Service tạo Booking
-3. BookingReadyForDispatch
-4. Dispatch Service tìm candidate → gửi offers
-5. Một driver accept → DriverAssigned
-6. Trip Service tạo Trip
-7. Driver cập nhật trạng thái/location
-8. TripCompleted
-9. Pricing Service finalize Fare
-10. Payment Service xử lý Cash/Electronic
-11. Feedback/History cập nhật projection + Rating
-12. Notification / Reporting / Audit consume events
-```
-
-## 4. Kết luận kiến trúc
-
-Thiết kế này giữ **Booking → Dispatch → Trip** là Core Domain; các BC khác đóng vai trò supporting/generic. Mỗi BC có ngôn ngữ, aggregate, API và database riêng, nhưng liên kết bằng contract/event thay vì chia sẻ model hoặc database. Đây là boundary phù hợp để triển khai Microservices mà vẫn giữ được tính nhất quán của DDD.
+| API Gateway là điểm vào duy nhất | Mục 1, 6, 7 |
+| Microservice và data ownership | Mục 1, 2, 4 |
+| IPC và message broker | HTTP + RabbitMQ ở mục 5 |
+| Health/readiness | Mục 3.5, 6, 7 |
+| Payment callback/idempotency | Mục 3.4, 5.3, 6 |
+| Nearby drivers, booking history/pagination | Mục 3.2 và API spec |
+| OTP onboarding, RBAC, injection/XSS | Mục 3.1, 6 |
+| Docker Compose, `.env`, container visibility | Mục 7 |
+
+## 10. Kết luận
+
+MVP giữ bảy service domain/application phía sau Gateway, MongoDB làm persistence và RabbitMQ cho integration events. Booking service hợp nhất booking, matching và trip lifecycle để giảm distributed transaction; Payment service sở hữu pricing/payment; Review service sở hữu rating/history projection; Admin service cung cấp quản trị/audit mà không chiếm quyền sở hữu domain data. Ranh giới này khớp hơn với SRS và API hiện tại, đồng thời vẫn giữ khả năng tách thêm bounded context khi nhu cầu thực tế xuất hiện.

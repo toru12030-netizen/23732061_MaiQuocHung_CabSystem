@@ -37,7 +37,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [fullName, email, phone, password, licenseNumber, licenseClass]
+              required: [fullName, email, phone, password, licenseNumber, licenseClass, verificationToken, vehicle]
               properties:
                 fullName: { type: string }
                 email: { type: string, format: email }
@@ -46,9 +46,69 @@ paths:
                 licenseNumber: { type: string }
                 licenseClass: { type: string }
                 licenseImageUrl: { type: string, format: uri }
+                verificationToken: { type: string, writeOnly: true, description: Short-lived proof returned after OTP verification }
+                vehicle:
+                  type: object
+                  required: [plateNumber, brand, model, color, vehicleType, seats]
+                  properties:
+                    plateNumber: { type: string }
+                    brand: { type: string }
+                    model: { type: string }
+                    color: { type: string }
+                    vehicleType: { type: string, enum: [sedan, suv, van] }
+                    seats: { type: integer, minimum: 4, maximum: 16 }
       responses:
         '201': { description: Driver application submitted for approval }
         '409': { description: Account or license already exists }
+        '422': { description: Verification token is missing, invalid, or expired }
+  /auth/driver-otp/request:
+    post:
+      tags: [Authentication]
+      summary: Send a one-time code to a prospective driver's phone
+      operationId: requestDriverOtp
+      x-fr-ids: [FR-AUTH-02]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { type: string, description: Verified Vietnamese mobile number }
+      responses:
+        '202': { description: OTP queued; code is never returned by production API }
+        '400': { description: Invalid phone number }
+        '429': { description: OTP request rate limit exceeded }
+  /auth/driver-otp/verify:
+    post:
+      tags: [Authentication]
+      summary: Verify a one-time code for a prospective driver's phone
+      operationId: verifyDriverOtp
+      x-fr-ids: [FR-AUTH-02]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otpCode]
+              properties:
+                phone: { type: string }
+                otpCode: { type: string, minLength: 6, maxLength: 6, writeOnly: true }
+      responses:
+        '200':
+          description: OTP verified; short-lived registration proof returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [verificationToken, expiresIn]
+                properties:
+                  verificationToken: { type: string, writeOnly: true }
+                  expiresIn: { type: integer, example: 300 }
+        '400': { description: Invalid or expired OTP }
+        '429': { description: Verification attempt limit exceeded }
   /auth/login:
     post:
       tags: [Authentication]
@@ -93,6 +153,20 @@ paths:
       responses:
         '200': { description: Profile updated }
         '401': { description: Authentication required }
+  /customers/{customerId}:
+    get:
+      tags: [Authentication]
+      summary: Get a customer profile by ID
+      operationId: getCustomerById
+      x-fr-ids: [FR-AUTH-04]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: customerId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Customer profile without password or authentication secrets }
+        '401': { description: Authentication required }
+        '403': { description: Caller is neither the customer nor an authorized operator/admin }
+        '404': { description: Customer not found }
   /auth/password:
     put:
       tags: [Authentication]

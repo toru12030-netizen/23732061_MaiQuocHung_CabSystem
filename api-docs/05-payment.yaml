@@ -55,6 +55,7 @@ paths:
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: rideId, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 16, maxLength: 128 } }
       requestBody:
         required: true
         content:
@@ -68,6 +69,32 @@ paths:
       responses:
         '200': { description: Payment result and provider transaction identifier }
         '402': { description: Payment failed; retry or cash fallback is available }
+        '409': { description: Idempotency key was reused with a different request body }
+  /payments/{paymentId}/callback:
+    post:
+      tags: [Payments]
+      summary: Receive a signed payment provider callback
+      operationId: receivePaymentCallback
+      x-fr-ids: [FR-PAY-05, FR-PAY-06]
+      parameters:
+        - { name: paymentId, in: path, required: true, schema: { type: string } }
+        - { name: X-Provider-Signature, in: header, required: true, schema: { type: string } }
+        - { name: X-Provider-Timestamp, in: header, required: true, schema: { type: string, format: date-time } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [providerTransactionId, result]
+              properties:
+                providerTransactionId: { type: string }
+                result: { type: string, enum: [success, failed] }
+                failureReason: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Callback verified and payment state updated once; duplicate callback is acknowledged idempotently }
+        '401': { description: Invalid signature or stale callback timestamp }
+        '404': { description: Payment not found }
   /rides/{rideId}/payment/cash-confirmation:
     post:
       tags: [Payments]

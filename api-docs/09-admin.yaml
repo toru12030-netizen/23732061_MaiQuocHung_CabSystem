@@ -40,6 +40,7 @@ paths:
         - { name: status, in: query, schema: { type: string, enum: [offline, available, busy, suspended] } }
         - { name: approved, in: query, schema: { type: boolean } }
         - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
         '200': { description: Paginated driver and vehicle list }
   /admin/rides:
@@ -53,6 +54,8 @@ paths:
         - { name: status, in: query, schema: { type: string } }
         - { name: from, in: query, schema: { type: string, format: date-time } }
         - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
         '200': { description: Filtered ride list }
     post:
@@ -87,6 +90,8 @@ paths:
         - { name: status, in: query, schema: { type: string, enum: [PENDING, COMPLETED, FAILED, REFUNDED] } }
         - { name: from, in: query, schema: { type: string, format: date-time } }
         - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
         '200': { description: Paginated payment transactions }
   /admin/reports/revenue:

@@ -58,6 +58,20 @@ paths:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
         '200': { description: Paginated ride history }
+  /customers/me/bookings:
+    get:
+      tags: [Rides]
+      summary: List bookings created by the authenticated customer
+      operationId: listMyBookings
+      x-fr-ids: [FR-RIDE-09]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Paginated bookings owned by the authenticated customer }
+        '401': { description: Authentication required }
   /rides/{rideId}:
     get:
       tags: [Rides]

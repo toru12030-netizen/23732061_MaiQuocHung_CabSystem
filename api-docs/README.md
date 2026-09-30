@@ -27,7 +27,9 @@ The API specifications are organized into 10 dedicated functional modules:
 9. **`09-admin.yaml`** – **Administration & Reporting** (`FR-ADM-01` to `FR-ADM-08`)
    * Operational dashboards, customer/driver search, ride monitoring/intervention (`force_cancel`, `rematch`), payment lookups, and reporting endpoints (revenue, rides, driver performance).
 10. **`10-security-audit.yaml`** – **Security, Audit & Health** (`FR-SEC-01` to `FR-SEC-05`)
-    * Immutable audit log search for security compliance, process health checks, and database connectivity tests.
+    * Immutable audit log search, liveness/readiness/service health checks, and database connectivity tests.
+
+The aggregate entry point `openapi.yaml` uses `http://localhost:3000/api/v1` and must be kept in sync with the modular YAML files. The API smoke flows include driver OTP onboarding, nearby driver search, customer booking history, signed payment callbacks, and idempotency handling.
 
 ---
 

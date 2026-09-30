@@ -4,10 +4,10 @@ info:
   title: CAB System API
   version: 1.0.0
   description: Aggregate entry point for the CAB System API. Module path items are
-    kept in separate files and referenced here; bundle this entry point with an OpenAPI
-    bundler when a single-file distribution is required.
+    represented as a complete single-file OpenAPI document. Keep this file synchronized
+    with the modular specifications.
 servers:
-- url: http://localhost:3000/api
+- url: http://localhost:3000/api/v1
   description: Local development server
 tags:
 - name: Authentication
@@ -80,6 +80,8 @@ paths:
               - password
               - licenseNumber
               - licenseClass
+              - verificationToken
+              - vehicle
               properties:
                 fullName:
                   type: string
@@ -99,11 +101,75 @@ paths:
                 licenseImageUrl:
                   type: string
                   format: uri
+                verificationToken:
+                  type: string
+                  writeOnly: true
+                  description: Short-lived proof returned after OTP verification
+                vehicle:
+                  type: object
+                  required: [plateNumber, brand, model, color, vehicleType, seats]
+                  properties:
+                    plateNumber: { type: string }
+                    brand: { type: string }
+                    model: { type: string }
+                    color: { type: string }
+                    vehicleType: { type: string, enum: [sedan, suv, van] }
+                    seats: { type: integer, minimum: 4, maximum: 16 }
       responses:
         '201':
           description: Driver application submitted for approval
         '409':
           description: Account or license already exists
+        '422':
+          description: Verification token is missing, invalid, or expired
+  "/auth/driver-otp/request":
+    post:
+      tags: [Authentication]
+      summary: Send a one-time code to a prospective driver's phone
+      operationId: requestDriverOtp
+      x-fr-ids: [FR-AUTH-02]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { type: string }
+      responses:
+        '202': { description: OTP queued; code is never returned by production API }
+        '400': { description: Invalid phone number }
+        '429': { description: OTP request rate limit exceeded }
+  "/auth/driver-otp/verify":
+    post:
+      tags: [Authentication]
+      summary: Verify a one-time code for a prospective driver's phone
+      operationId: verifyDriverOtp
+      x-fr-ids: [FR-AUTH-02]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otpCode]
+              properties:
+                phone: { type: string }
+                otpCode: { type: string, minLength: 6, maxLength: 6, writeOnly: true }
+      responses:
+        '200':
+          description: OTP verified; short-lived registration proof returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [verificationToken, expiresIn]
+                properties:
+                  verificationToken: { type: string, writeOnly: true }
+                  expiresIn: { type: integer, example: 300 }
+        '400': { description: Invalid or expired OTP }
+        '429': { description: Verification attempt limit exceeded }
   "/auth/login":
     post:
       tags:
@@ -171,6 +237,23 @@ paths:
           description: Profile updated
         '401':
           description: Authentication required
+  "/customers/{customerId}":
+    get:
+      tags: [Authentication]
+      summary: Get a customer profile by ID
+      operationId: getCustomerById
+      x-fr-ids: [FR-AUTH-04]
+      security: [{ bearerAuth: [] }]
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema: { type: string }
+      responses:
+        '200': { description: Customer profile without password or authentication secrets }
+        '401': { description: Authentication required }
+        '403': { description: Caller is not authorized to view this customer }
+        '404': { description: Customer not found }
   "/auth/password":
     put:
       tags:
@@ -231,6 +314,23 @@ paths:
       responses:
         '200':
           description: Vehicle list
+  "/drivers/{driverId}":
+    get:
+      tags: [Drivers and Vehicles]
+      summary: Get a driver profile by ID
+      operationId: getDriverById
+      x-fr-ids: [FR-DRV-05]
+      security: [{ bearerAuth: [] }]
+      parameters:
+      - name: driverId
+        in: path
+        required: true
+        schema: { type: string }
+      responses:
+        '200': { description: Driver profile and active vehicle details without private documents }
+        '401': { description: Authentication required }
+        '403': { description: Caller is not authorized to view this driver }
+        '404': { description: Driver not found }
     post:
       tags:
       - Drivers and Vehicles
@@ -536,6 +636,26 @@ paths:
           description: Ride not found
         '403':
           description: Ride is not accessible to this user
+  "/customers/me/bookings":
+    get:
+      tags: [Rides]
+      summary: List bookings created by the authenticated customer
+      operationId: listMyBookings
+      x-fr-ids: [FR-RIDE-09]
+      security: [{ bearerAuth: [] }]
+      parameters:
+      - name: status
+        in: query
+        schema: { type: string }
+      - name: page
+        in: query
+        schema: { type: integer, minimum: 1, default: 1 }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200': { description: Paginated bookings owned by authenticated customer }
+        '401': { description: Authentication required }
   "/rides/{rideId}/cancel":
     post:
       tags:
@@ -811,6 +931,10 @@ paths:
         required: true
         schema:
           type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: { type: string, minLength: 16, maxLength: 128 }
       requestBody:
         required: true
         content:
@@ -833,6 +957,42 @@ paths:
           description: Payment result and provider transaction identifier
         '402':
           description: Payment failed; retry or cash fallback is available
+        '409':
+          description: Idempotency key was reused with a different request body
+  "/payments/{paymentId}/callback":
+    post:
+      tags: [Payments]
+      summary: Receive a signed payment provider callback
+      operationId: receivePaymentCallback
+      x-fr-ids: [FR-PAY-05, FR-PAY-06]
+      parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: X-Provider-Signature
+        in: header
+        required: true
+        schema: { type: string }
+      - name: X-Provider-Timestamp
+        in: header
+        required: true
+        schema: { type: string, format: date-time }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [providerTransactionId, result]
+              properties:
+                providerTransactionId: { type: string }
+                result: { type: string, enum: [success, failed] }
+                failureReason: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Verified; payment state updated once; duplicate callback acknowledged idempotently }
+        '401': { description: Invalid signature or stale callback timestamp }
+        '404': { description: Payment not found }
   "/rides/{rideId}/payment/cash-confirmation":
     post:
       tags:
@@ -896,6 +1056,38 @@ paths:
       responses:
         '204':
           description: Location accepted and broadcast to authorized ride participants
+  "/drivers/nearby":
+    get:
+      tags: [Tracking]
+      summary: Search drivers near a coordinate
+      operationId: findNearbyDrivers
+      x-fr-ids: [FR-MATCH-01, FR-TRACK-04]
+      security: [{ bearerAuth: [] }]
+      parameters:
+      - name: latitude
+        in: query
+        required: true
+        schema: { type: number, minimum: -90, maximum: 90 }
+      - name: longitude
+        in: query
+        required: true
+        schema: { type: number, minimum: -180, maximum: 180 }
+      - name: radiusKm
+        in: query
+        schema: { type: number, minimum: 0.1, maximum: 100, default: 1 }
+      - name: status
+        in: query
+        schema: { type: string, enum: [offline, available, busy, suspended] }
+      - name: page
+        in: query
+        schema: { type: integer, minimum: 1, default: 1 }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200': { description: Paginated drivers within radius, ordered by distance }
+        '400': { description: Invalid coordinate or radius }
+        '401': { description: Authentication required }
         '403':
           description: Driver is not authorized to submit location
   "/rides/{rideId}/location":
@@ -948,6 +1140,12 @@ paths:
           minimum: 0
           maximum: 100
           default: 20
+      - name: page
+        in: query
+        schema: { type: integer, minimum: 1, default: 1 }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
       responses:
         '200':
           description: Active drivers and their availability states
@@ -1172,6 +1370,9 @@ paths:
           type: integer
           minimum: 1
           default: 1
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
       responses:
         '200':
           description: Paginated driver and vehicle list
@@ -1200,6 +1401,12 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: page
+        in: query
+        schema: { type: integer, minimum: 1, default: 1 }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
       responses:
         '200':
           description: Filtered ride list
@@ -1271,6 +1478,12 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: page
+        in: query
+        schema: { type: integer, minimum: 1, default: 1 }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
       responses:
         '200':
           description: Paginated payment transactions
@@ -1362,7 +1575,7 @@ paths:
           description: Driver performance report
         '403':
           description: Admin role required
-  "/admin/audit-logs":
+  "/admin/audit-logs": 
     get:
       tags:
       - Security and Audit
@@ -1399,6 +1612,9 @@ paths:
           type: integer
           minimum: 1
           default: 1
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
       responses:
         '200':
           description: Paginated audit log; records are read-only
@@ -1430,6 +1646,24 @@ paths:
           description: Database is reachable
         '503':
           description: Database is unavailable
+  "/ready":
+    get:
+      tags: [Security and Audit]
+      summary: Check whether the API is ready to receive traffic
+      operationId: getReadiness
+      x-fr-ids: [FR-SEC-05]
+      responses:
+        '200': { description: API and required dependencies are ready }
+        '503': { description: API or required dependency is not ready }
+  "/health/services":
+    get:
+      tags: [Security and Audit]
+      summary: Check health of API services and dependencies
+      operationId: getServicesHealth
+      x-fr-ids: [FR-SEC-05]
+      responses:
+        '200': { description: All required services are healthy; response lists each component status }
+        '503': { description: At least one required service is unhealthy }
 components:
   securitySchemes:
     bearerAuth:

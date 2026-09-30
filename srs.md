@@ -16,41 +16,31 @@
 ## 📖 Mục lục
 
 ### [Giai đoạn 1 – Phân tích yêu cầu sơ khởi](#giai-đoạn-1--phân-tích-yêu-cầu-sơ-khởi)
-
-| # | Mục | Link |
-|---|---|---|
-| 1.1 | Business Context (Ngữ cảnh nghiệp vụ) | [→ Xem](#11-business-context-ngữ-cảnh-nghiệp-vụ) |
-| 1.2 | Business Problem (Vấn đề nghiệp vụ) | [→ Xem](#12-business-problem-vấn-đề-nghiệp-vụ) |
-| 1.3 | Stakeholders & Stakeholder Matrix | [→ Xem](#13-stakeholders--stakeholder-matrix) |
-| 1.4 | Business Goals (Mục tiêu nghiệp vụ) | [→ Xem](#14-business-goals-mục-tiêu-nghiệp-vụ) |
-| 1.5 | Phạm vi hệ thống (Scope) | [→ Xem](#15-phạm-vi-hệ-thống-scope) |
-| 1.6 | Business Requirements | [→ Xem](#16-business-requirements-yêu-cầu-nghiệp-vụ) |
-| 1.7 | Business Processes | [→ Xem](#17-business-processes-quy-trình-nghiệp-vụ) |
-| 1.8 | Open Issues & Điểm chưa rõ | [→ Xem](#18-open-issues--điểm-chưa-rõ-cần-xác-nhận) |
+- [1.1 Business Context (Ngữ cảnh nghiệp vụ](#11-business-context-ngữ-cảnh-nghiệp-vụ) 
+- [ 1.2 Business Problem (Vấn đề nghiệp vụ)](#12-business-problem-vấn-đề-nghiệp-vụ) 
+- [ 1.3 Stakeholders & Stakeholder Matrix ](#13-stakeholders--stakeholder-matrix) 
+- [ 1.4 Business Goals (Mục tiêu nghiệp vụ](#14-business-goals-mục-tiêu-nghiệp-vụ) 
+- [ 1.5 Phạm vi hệ thống (Scope)](#15-phạm-vi-hệ-thống-scope) 
+- [ 1.6 Business Requirements](#16-business-requirements-yêu-cầu-nghiệp-vụ) 
+- [ 1.7 Business Processes](#17-business-processes-quy-trình-nghiệp-vụ) 
+- [ 1.8 Open Issues ](#18-open-issues--điểm-chưa-rõ-cần-xác-nhận) |
 
 ### [Giai đoạn 2 – Phân rã yêu cầu chức năng](#giai-đoạn-2--phân-rã-yêu-cầu-chức-năng)
-
-| # | Mục | Link |
-|---|---|---|
-| 2.1 | Cây phân rã chức năng | [→ Xem](#21-cây-phân-rã-chức-năng-functional-decomposition-tree) |
-| 2.2 | Bảng phân rã chi tiết | [→ Xem](#22-bảng-phân-rã-chi-tiết-yêu-cầu-chức-năng-theo-từng-phân-hệ) |
-| 2.3 | Ma trận Function-Actor | [→ Xem](#23-ma-trận-liên-kết-chức-năng-và-tác-nhân-function-actor-matrix) |
+- [ 2.1 Cây phân rã chức năng](#21-cây-phân-rã-chức-năng-functional-decomposition-tree)
+- [2.2 Bảng phân rã chi tiết](#22-bảng-phân-rã-chi-tiết-yêu-cầu-chức-năng-theo-từng-phân-hệ)
+- [ 2.3 Ma trận Function-Actor ](#23-ma-trận-liên-kết-chức-năng-và-tác-nhân-function-actor-matrix)
 
 ### [Giai đoạn 3 – Quy tắc nghiệp vụ & Xử lý ngoại lệ](#giai-đoạn-3--quy-tắc-nghiệp-vụ--xử-lý-ngoại-lệ)
 
-| # | Mục | Link |
-|---|---|---|
-| 3.1 | Danh mục Business Rules | [→ Xem](#31-danh-mục-quy-tắc-nghiệp-vụ-business-rules-catalog) |
-| 3.2 | Danh mục Exceptions | [→ Xem](#32-danh-mục-trường-hợp-ngoại-lệ--cơ-chế-xử-lý) |
-| 3.3 | Ma trận Rule-Exception | [→ Xem](#33-ma-trận-liên-kết-quy-tắc--ngoại-lệ) |
+- [ 3.1 Danh mục Business Rules](#31-danh-mục-quy-tắc-nghiệp-vụ-business-rules-catalog) 
+- [ 3.2 Danh mục Exceptions ](#32-danh-mục-trường-hợp-ngoại-lệ--cơ-chế-xử-lý) 
+- [ 3.3 Ma trận Rule-Exception](#33-ma-trận-liên-kết-quy-tắc--ngoại-lệ) 
 
 ### [Giai đoạn 4 – Mô hình hóa dữ liệu](#giai-đoạn-4--mô-hình-hóa-dữ-liệu)
 
-| # | Mục | Link |
-|---|---|---|
-| 4.1 | ERD | [→ Xem](#41-sơ-đồ-thực-thể-liên-kết-erd) |
-| 4.2 | Từ điển dữ liệu | [→ Xem](#42-từ-điển-dữ-liệu-chi-tiết) |
-| 4.3 | Chiến lược Index | [→ Xem](#43-chiến-lược-chỉ-mục--tối-ưu-hóa-truy-vấn-địa-không-gian) |
+- [ 4.1 ERD](#41-sơ-đồ-thực-thể-liên-kết-erd) 
+- [ 4.2 Từ điển dữ liệu](#42-từ-điển-dữ-liệu-chi-tiết) 
+- [ 4.3 Chiến lược Index](#43-chiến-lược-chỉ-mục--tối-ưu-hóa-truy-vấn-địa-không-gian) x
 
 ### [Giai đoạn 5 – Yêu cầu phi chức năng (NFRs)](#giai-đoạn-5--yêu-cầu-phi-chức-năng-nfrs)
 
@@ -59,6 +49,8 @@
 ### [Giai đoạn 7 – Tiêu chí chấp nhận (AC)](#giai-đoạn-7--tiêu-chí-chấp-nhận-acceptance-criteria)
 
 ### [Giai đoạn 8 – Ma trận Truy xuất Yêu cầu (RTM)](#giai-đoạn-8--ma-trận-truy-xuất-yêu-cầu-rtm)
+
+### [Phụ lục A – Kiến trúc triển khai, API & kiểm chứng](#phụ-lục-a--kiến-trúc-triển-khai-api--kiểm-chứng)
 
 
 ---
@@ -312,7 +304,7 @@ flowchart LR
 
 #### 1.5.1 Trong phạm vi (In Scope) – MVP Phase 1
 
-Hệ thống CAB MVP bao gồm **3 ứng dụng web** và **1 backend API**, phục vụ quy trình cốt lõi: **Đặt xe → Tìm tài xế → Thực hiện chuyến → Tính cước → Thanh toán → Đánh giá**.
+Hệ thống CAB MVP bao gồm **3 ứng dụng web**, **1 API Gateway** và các backend service độc lập, phục vụ quy trình cốt lõi: **Đặt xe → Tìm tài xế → Thực hiện chuyến → Tính cước → Thanh toán → Đánh giá**.
 
 **A. Actors (Tác nhân tương tác với hệ thống):**
 
@@ -496,7 +488,7 @@ flowchart TB
             AApp["🔧 Admin Dashboard\n(React + Ant Design)"]
         end
 
-        subgraph Backend["Backend API Server"]
+        subgraph Backend["API Gateway + Backend Services"]
             Auth["Module Auth & User"]
             Driver["Module Driver & Vehicle"]
             Ride["Module Ride & Matching"]
@@ -1609,7 +1601,7 @@ graph LR
 
 | Mã NFR | Tiêu chí | Mô tả | Ưu tiên |
 |---|---|---|---|
-| NFR-SCL-01 | Modular Monolith | Routes → Controller → Service → Model | Must Have |
+| NFR-SCL-01 | Microservice qua API Gateway | Các service độc lập; client chỉ truy cập qua Gateway; mỗi service tổ chức Routes → Controller → Service → Model | Must Have |
 | NFR-SCL-02 | Stateless Scaling | JWT, scale ngang qua Load Balancer | Should Have |
 | NFR-SCL-03 | Provider Pattern | Thêm Payment/Notification Provider < 2 ngày | Must Have |
 
@@ -2268,3 +2260,124 @@ $$\text{BG} \longrightarrow \text{BR} \longrightarrow \text{FR} \longrightarrow 
 
 
 
+---
+
+## Phụ lục A – Kiến trúc triển khai, API & kiểm chứng
+
+> Phụ lục này bổ sung yêu cầu kỹ thuật để triển khai và chấm thực hành. Các giá trị cụ thể ở đây là baseline cho MVP; thay đổi kiến trúc phải cập nhật đồng bộ sơ đồ, API contract và Postman collection.
+
+### A.1 Kiến trúc service và tổ chức source code
+
+Hệ thống được triển khai theo kiến trúc microservice tối giản. Các service dùng database riêng theo quyền sở hữu dữ liệu; không đọc/ghi trực tiếp database của service khác. Client (Customer Web, Driver Web, Admin Dashboard và Postman) chỉ gọi API Gateway.
+
+| Thành phần | Trách nhiệm / dữ liệu sở hữu |
+|---|---|
+| API Gateway | Điểm vào HTTP duy nhất; định tuyến, xác thực JWT, áp dụng rate limit, correlation ID và chuẩn hóa lỗi |
+| Auth Service | Đăng ký/đăng nhập, OTP, user profile, refresh/revoke token, RBAC |
+| Driver Service | Hồ sơ tài xế, phương tiện, duyệt, trạng thái online và vị trí gần nhất |
+| Booking/Ride Service | Booking, matching/offer, vòng đời ride, trạng thái và lịch sử |
+| Payment Service | Payment intent, callback, trạng thái giao dịch và idempotency |
+| Review Service | Review, liên kết ride và thống kê rating |
+| Notification Service | Thông báo in-app/email và gửi theo sự kiện |
+| MongoDB | Persistence cho domain data; mỗi service có database/namespace riêng |
+| RabbitMQ | Giao tiếp bất đồng bộ giữa service; message có event ID, version và correlation ID |
+
+Đề xuất cấu trúc source code:
+
+```text
+cab-system/
+  apps/ customer-web/ driver-web/ admin-web/
+  services/ api-gateway/ auth-service/ driver-service/
+            booking-service/ payment-service/ review-service/ notification-service/
+  packages/ contracts/ shared-config/
+  infra/ docker-compose.yml, gateway/, rabbitmq/
+  postman/ CAB-System.postman_collection.json, local.postman_environment.json.example
+  .env.example
+```
+
+Mỗi service tổ chức mã nguồn theo `src/routes`, `src/controllers`, `src/services`, `src/models`, `src/middlewares`, `src/config`. Cấu hình bí mật chỉ lấy từ environment/secret store; `.env` thật, credential, signing key và dữ liệu cá nhân không được commit. `.gitignore` phải loại trừ `.env`, `.env.*` (ngoại trừ `.env.example`), log, build output và thư mục dependency. CI/review phải kiểm tra secret trước khi push.
+
+### A.2 Gateway và giao tiếp giữa service
+
+Gateway phải xác thực chữ ký JWT và thời hạn token trước khi chuyển request; kiểm tra role/permission tại Gateway và tiếp tục kiểm tra ownership/authorization tại service đích. Gateway áp dụng giới hạn kích thước request, rate limit, correlation ID, timeout, TLS ở môi trường triển khai và không được trả stack trace/secret cho client. Request gọi thẳng service từ mạng client phải bị chặn; nội bộ chỉ expose service trên private network.
+
+Giao tiếp đồng bộ nội bộ dùng HTTP/REST khi cần phản hồi tức thì. Giao tiếp bất đồng bộ dùng RabbitMQ cho các event như `BookingCreated`, `RideAssigned`, `RideStatusChanged`, `PaymentCompleted`, `ReviewCreated`. Publisher/consumer phải xử lý retry có giới hạn, dead-letter queue, duplicate delivery an toàn và log lỗi; không để lỗi Notification/Payment làm mất Booking/Ride. Không gửi dữ liệu thẻ, mật khẩu hoặc OTP dạng plaintext trong message.
+
+### A.3 Docker Compose và container
+
+Docker Compose local phải khởi chạy tối thiểu: `api-gateway`, `auth-service`, `driver-service`, `booking-service`, `payment-service`, `review-service`, `notification-service`, `mongodb` (hoặc MongoDB riêng theo service), và `rabbitmq`. Web apps có thể chạy thành container riêng hoặc profile tùy cấu hình bài thực hành. Container phải có healthcheck, restart policy phù hợp, dùng named volume cho dữ liệu cần giữ và chỉ publish port cần thiết. Chỉ Gateway publish API port ra host; MongoDB, RabbitMQ management và các service nội bộ không public ra mạng ngoài mặc định.
+
+`docker compose up --build` phải đưa các dependency và service vào trạng thái healthy; `docker compose ps` là danh sách kiểm tra container. `.env.example` cung cấp tên biến và giá trị giả lập, không chứa secret dùng thật.
+
+### A.4 Health/readiness endpoints
+
+Các endpoint sau được phục vụ qua Gateway và không yêu cầu JWT trong môi trường local:
+
+| Endpoint | Ý nghĩa | Thành công | Thất bại |
+|---|---|---|---|
+| `GET /health` | Liveness: process đang chạy | HTTP 200, `status: healthy` | HTTP 503 khi process không phục vụ |
+| `GET /ready` | Readiness: service sẵn sàng nhận traffic, dependency bắt buộc đã kết nối | HTTP 200, `status: ready` | HTTP 503, kèm dependency lỗi không nhạy cảm |
+| `GET /health/services` | Tình trạng Gateway và từng service/dependency | HTTP 200 khi tất cả thành phần bắt buộc healthy; payload liệt kê trạng thái từng thành phần | HTTP 503 nếu có thành phần bắt buộc unhealthy |
+
+Health response không tiết lộ connection string, credential, stack trace hoặc dữ liệu người dùng. Các endpoint `/api/health` và `/api/health/db` trước đây được chuẩn hóa thành các endpoint trên; service nội bộ có thể giữ health endpoint riêng nhưng phải được Gateway tổng hợp.
+
+### A.5 API contract và Postman smoke suite
+
+API sử dụng JSON, bearer JWT, mã lỗi nhất quán; danh sách hỗ trợ `limit` (mặc định 20, tối đa 100), `page` (bắt đầu 1) và trả `items`, `page`, `limit`, `total`, `totalPages`. Các endpoint dưới đây là contract logic; prefix deployment là `/api/v1` sau Gateway.
+
+| Luồng | Endpoint gợi ý | Quyền / kết quả chính |
+|---|---|---|
+| Health | `GET /health`, `/ready`, `/health/services` | Public; 200/503 theo trạng thái |
+| Customer register/login | `POST /auth/customers`, `POST /auth/login` | Register 201; login 200 + access/refresh token |
+| Read customer/driver | `GET /customers/{id}`, `GET /drivers/{id}` | Bearer token; owner hoặc role được phép; 401/403/404 đúng trường hợp |
+| Driver nearby | `GET /drivers/nearby?lat=&lng=&radiusKm=1&page=&limit=` | Authenticated; lọc theo tọa độ/trạng thái, trả pagination |
+| Customer bookings | `GET /customers/{id}/bookings?page=&limit=` | Owner/Admin; chỉ trả booking được phép xem |
+| Create booking / offer | `POST /bookings` | Customer; 201, booking `searching`; phát offer tới driver phù hợp |
+| Accept offer | `POST /rides/{rideId}/accept` | Driver được offer; gán duy nhất một driver, thông báo customer |
+| Ride status/GPS | `PATCH /rides/{id}/status`, `PATCH /drivers/me/location` | Driver sở hữu ride; chỉ chuyển trạng thái hợp lệ |
+| Cancel ride | `POST /rides/{id}/cancel` | Customer/Driver theo policy; trạng thái chuẩn `CANCELED`, lưu actor/reason và thông báo các bên |
+| Payment | `POST /payments`, `POST /payments/{id}/callback` | Callback xác minh chữ ký provider; payment chuyển `COMPLETED` đúng một lần |
+| Review | `POST /rides/{id}/reviews` | Customer của ride đã hoàn tất/đã thanh toán; 201, một review mỗi ride |
+| Driver onboarding | `POST /drivers/otp/request`, `/drivers/otp/verify`, `POST /drivers/applications` | OTP có thời hạn, giới hạn resend/attempt; hồ sơ tạo `PENDING_APPROVAL` |
+| Driver approval | `GET /admin/drivers/applications`, `GET /admin/drivers/{id}`, `PATCH /admin/drivers/{id}/decision` | Admin/Operator theo quyền; approve/reject ghi audit và thông báo tài xế |
+| Driver availability | `PATCH /drivers/me/availability` | Driver đã duyệt; cập nhật `ONLINE`/`OFFLINE` (mapping domain: available/offline) |
+
+Postman collection phải định nghĩa environment variables `baseUrl`, `customerToken`, `driverToken`, `adminToken`, `customerId`, `driverId`, `bookingId`, `rideId`, `paymentId`. Smoke flow phải lưu ID/token từ response để chạy chuỗi đăng ký → đăng nhập → đặt xe → nhận chuyến → hoàn thành → thanh toán/callback → review. Seed data phải có tối thiểu 5 driver ở nhiều trạng thái/vị trí và 5 booking để kiểm tra nearby, filter, limit và paging. Callback thanh toán phải có bộ dữ liệu mock thành công/thất bại và chữ ký giả lập được kiểm chứng.
+
+### A.6 Bổ sung yêu cầu bảo mật có thể kiểm chứng
+
+| Mã | Yêu cầu và tiêu chí nghiệm thu |
+|---|---|
+| NFR-SEC-07 | **Encryption at rest**: mật khẩu lưu bằng Argon2id hoặc bcrypt (hash một chiều); dữ liệu cá nhân/định danh nhạy cảm cần giải mã khi dùng phải mã hóa bằng authenticated encryption (ví dụ AES-256-GCM). Không lưu key cùng database. Key lấy từ secret manager/environment trong local, hỗ trợ xoay key và có `keyVersion`. Không mã hóa token thanh toán thay cho quy tắc không lưu PAN/CVV. |
+| NFR-SEC-08 | **Injection defense**: mọi query phải dùng driver/ODM parameterization, allowlist field/sort, validate và giới hạn input; không nối chuỗi input vào query. Với MongoDB phải chặn operator injection; nếu adapter SQL được dùng phải dùng parameterized query. Payload `email: "' OR 1=1 --"` không đăng nhập được, không làm lộ dữ liệu; trả 400/401. |
+| NFR-SEC-09 | **XSS defense**: validate input theo ngữ cảnh, encode output tại UI, không render HTML tùy ý; CSP tại web app. Gửi `<script>alert('hack')</script>` qua profile/review không được thực thi khi hiển thị; lưu/hiển thị an toàn theo chính sách nội dung. |
+| NFR-SEC-10 | **JWT tampering**: chỉ chấp nhận thuật toán allowlist, xác minh signature, `iss`, `aud`, `exp` và role từ claim đã ký; token sửa `sub`/`role`, thiếu chữ ký hoặc hết hạn trả 401 và không truy cập API. |
+| NFR-SEC-11 | **Authorization**: Customer gọi endpoint chỉ dành cho Driver/Admin trả 403 không có dữ liệu; mọi truy vấn theo ID phải kiểm tra ownership để chống IDOR. |
+| NFR-SEC-12 | **Rate limiting**: ngoài login/booking limits ở NFR-SEC-06, Gateway giới hạn mặc định 100 request/giây/IP cho API thường và 10 booking/phút/customer; vượt giới hạn trả 429 cùng `Retry-After`. Ngưỡng có thể cấu hình theo môi trường. |
+| NFR-SEC-13 | **Payment idempotency/replay**: yêu cầu tạo/thu payment bắt buộc có `Idempotency-Key`; khóa duy nhất theo customer + operation, lưu request hash và response. Cùng key/cùng payload trả response cũ; cùng key/khác payload trả 409. Callback phải xác minh signature, timestamp và provider transaction ID; callback/request lặp không tạo charge hoặc cập nhật payment lần hai. |
+
+### A.7 Tiêu chí nghiệm thu bổ sung theo phiếu chấm
+
+| AC ID | Given / When | Kết quả mong đợi |
+|---|---|---|
+| AC-INFRA-01 | Compose được khởi chạy | Tất cả container bắt buộc healthy; chỉ Gateway mở API ra host; service nội bộ kết nối được MongoDB/RabbitMQ |
+| AC-INFRA-02 | Gọi health endpoints qua Gateway | `/health`, `/ready`, `/health/services` trả đúng 200/503 và trạng thái từng dependency |
+| AC-INFRA-03 | Gọi trực tiếp port service từ host/client | Không truy cập được service nội bộ; gọi cùng API qua Gateway hoạt động |
+| AC-INFRA-04 | Tạo booking | Booking Service phát event; driver phù hợp nhận offer; lỗi Notification không làm mất booking |
+| AC-API-01 | Postman đăng ký rồi đăng nhập Customer | Tạo user 201, login 200 và collection lưu bearer token dùng được |
+| AC-API-02 | Customer/Driver đọc profile theo ID | Người có quyền nhận dữ liệu; token thiếu/hỏng 401; sai role/ownership 403 |
+| AC-API-03 | Có ≥5 driver và ≥5 booking seed | Nearby bán kính 1km lọc đúng, paging/limit không trùng/không bỏ bản ghi |
+| AC-API-04 | Driver gửi OTP, xác minh và nộp hồ sơ | OTP sai/hết hạn bị từ chối; hồ sơ hợp lệ ở `PENDING_APPROVAL` |
+| AC-API-05 | Admin duyệt hoặc từ chối hồ sơ | Quyết định được lưu, audit log được tạo, tài xế được thông báo |
+| AC-API-06 | Ride lifecycle và cancellation | Chỉ cho phép chuyển tuần tự; hủy lưu lý do/actor, trạng thái API `CANCELED`, các bên được thông báo |
+| AC-API-07 | Payment provider callback thành công | Chữ ký hợp lệ cập nhật `COMPLETED`; callback lặp không tạo xử lý thứ hai |
+| AC-SEC-01 | Trực tiếp kiểm tra DB | Password không thể đọc dạng plaintext; dữ liệu được mã hóa có key version; key không nằm trong DB/repository |
+| AC-SEC-02 | Gửi SQL/NoSQL injection và XSS payload | Không bypass auth, không lộ DB; nội dung script không thực thi; trả lỗi hợp lệ |
+| AC-SEC-03 | Sửa payload JWT và gọi API | HTTP 401, không thay đổi danh tính/role |
+| AC-SEC-04 | Customer gọi API Driver/Admin | HTTP 403, response không chứa dữ liệu bị cấm |
+| AC-SEC-05 | Vượt ngưỡng rate limit | HTTP 429 và `Retry-After`; service tiếp tục healthy |
+| AC-SEC-06 | Gửi lại payment request/callback | Không double charge; cùng idempotency key trả response đã lưu |
+
+### A.8 Quy tắc chuẩn hóa thuật ngữ và trạng thái
+
+Trong API public, trạng thái hủy được trả là `CANCELED` theo phiếu chấm; dữ liệu domain nội bộ có thể phân biệt `cancelled_by_customer` và `cancelled_by_driver`, nhưng phải ánh xạ thống nhất và giữ `cancelledBy`/`cancelReason`. Thuật ngữ Booking chỉ yêu cầu đặt xe; Ride/Trip là chuyến được thực hiện. Các API history phải nêu rõ loại tài nguyên trả về.

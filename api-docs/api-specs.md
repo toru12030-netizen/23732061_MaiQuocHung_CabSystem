@@ -14,7 +14,7 @@
 ### 1. Chuẩn hóa Định dạng Dữ liệu phản hồi (Response Format)
 Mọi API trong hệ thống đều trả về cấu trúc JSON đồng nhất:
 
-#### Phản hồi thành công (Success Response):
+#### Phản hồi lỗi (Error Response):
 ```json
 {
   "success": true,
@@ -57,8 +57,9 @@ Authorization: Bearer <access_token>
 
 ## II. DANH MỤC CÁC ENDPOINTS CHI TIẾT
 ### 1. Phân hệ Xác thực & Quản lý tài khoản (Auth Module - 01-auth.yaml)
-#### 1.1 Đăng ký tài khoản Khách hàngMethod: 
-- POSTEndpoint: /auth/register/customer
+#### 1.1 Đăng ký tài khoản Khách hàng
+- **Method:** POST
+- **Endpoint:** `/auth/register/customer`
 - Truy xuất: FR-AUTH-01  
 - Request Body:
 ```json
@@ -71,7 +72,8 @@ Authorization: Bearer <access_token>
 ```
 - Response (201 Created): { "description": "Customer account created" }
 #### 1.2 Đăng ký tài khoản Đối tác Tài xế
-- Method: POSTEndpoint: /auth/register/driver
+- **Method:** POST
+- **Endpoint:** `/auth/register/driver` (yêu cầu OTP điện thoại hợp lệ)
 - Truy xuất: FR-AUTH-02   
 Request Body:
 ```json
@@ -265,4 +267,37 @@ Trả về đối tượng AuthSession gồm accessToken, refreshToken, expiresI
 ### 10. Phân hệ Bảo mật & Kiểm toán (Security & Audit Module - 10-security-audit.yaml)
 - GET /admin/audit-logs: Tra cứu nhật ký kiểm toán (Audit Logs).   
 - GET /health: Kiểm tra trạng thái hoạt động API (Health Check).   
-- GET /health/db: Kiểm tra kết nối cơ sở dữ liệu.   
+- GET /health/db: Kiểm tra kết nối cơ sở dữ liệu.    
+
+---
+
+## III. Endpoint bổ sung và quy tắc kiểm thử
+
+| Method | Endpoint | Mục đích |
+|---|---|---|
+| POST | `/auth/driver-otp/request` | Gửi OTP đến số điện thoại tài xế; không trả OTP trong môi trường production |
+| POST | `/auth/driver-otp/verify` | Xác minh OTP và cấp proof ngắn hạn để nộp hồ sơ |
+| GET | `/customers/{customerId}` | Xem hồ sơ theo ID; chỉ owner hoặc Operator/Admin được phép |
+| GET | `/drivers/{driverId}` | Xem thông tin tài xế và xe công khai; không trả giấy tờ riêng tư |
+| GET | `/drivers/nearby?latitude=&longitude=&radiusKm=1&page=1&limit=20` | Tìm tài xế gần tọa độ, có lọc trạng thái và phân trang |
+| GET | `/customers/me/bookings?page=1&limit=20` | Danh sách booking của customer đang đăng nhập |
+| POST | `/payments/{paymentId}/callback` | Nhận callback có chữ ký từ payment provider; xử lý lặp an toàn |
+| GET | `/ready` | Readiness của API và dependency bắt buộc |
+| GET | `/health/services` | Trạng thái từng service/dependency |
+
+### Quy tắc pagination
+
+Endpoint danh sách dùng `page` bắt đầu từ 1, `limit` mặc định 20 và tối đa 100. Response danh sách thống nhất cấu trúc `items`, `page`, `limit`, `total`, `totalPages`. Hỗ trợ pagination cho danh sách driver, customer booking, admin driver/customer/ride/payment, audit log, tracking locations, notifications và reviews.
+
+### Thanh toán chống replay
+
+`POST /rides/{rideId}/payment/checkout` bắt buộc header `Idempotency-Key`. Gửi lại cùng key và cùng payload trả lại kết quả đã lưu; dùng lại key với payload khác trả HTTP 409. Callback phải xác minh chữ ký và timestamp provider, đối chiếu transaction ID; callback lặp không được cập nhật hoặc thu tiền lần nữa.
+
+### Bảo mật API
+
+- Payload SQL/NoSQL injection không được bypass xác thực hoặc làm lộ dữ liệu; query phải dùng parameterization/ODM an toàn và allowlist field.
+- Input XSS phải được encode khi hiển thị; script không được thực thi trong web app.
+- JWT sửa payload/chữ ký, sai issuer/audience hoặc hết hạn phải bị từ chối HTTP 401.
+- Customer gọi API chỉ dành cho Driver/Admin hoặc đọc tài nguyên không thuộc quyền phải nhận HTTP 403, không có dữ liệu nhạy cảm trong response.
+- Vượt rate limit trả HTTP 429 và `Retry-After`.
+- Health endpoints không yêu cầu JWT nhưng không được tiết lộ secret, stack trace hay connection string.

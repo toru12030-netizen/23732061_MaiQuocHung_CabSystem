@@ -4,6 +4,20 @@ info:
   version: 1.0.0
   description: Driver and vehicle operations for FR-DRV-01 through FR-DRV-06.
 paths:
+  /drivers/{driverId}:
+    get:
+      tags: [Drivers and Vehicles]
+      summary: Get a driver profile by ID
+      operationId: getDriverById
+      x-fr-ids: [FR-DRV-05]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: driverId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Driver profile and active vehicle details without private documents }
+        '401': { description: Authentication required }
+        '403': { description: Caller is not authorized to view this driver }
+        '404': { description: Driver not found }
   /drivers/me/vehicles:
     get:
       tags: [Drivers and Vehicles]

@@ -4,6 +4,24 @@ info:
   version: 1.0.0
   description: Driver GPS ingestion, ride tracking, and operator map data for FR-TRACK-01 through FR-TRACK-04.
 paths:
+  /drivers/nearby:
+    get:
+      tags: [Tracking]
+      summary: Search drivers near a coordinate
+      operationId: findNearbyDrivers
+      x-fr-ids: [FR-MATCH-01, FR-TRACK-04]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: latitude, in: query, required: true, schema: { type: number, minimum: -90, maximum: 90 } }
+        - { name: longitude, in: query, required: true, schema: { type: number, minimum: -180, maximum: 180 } }
+        - { name: radiusKm, in: query, schema: { type: number, minimum: 0.1, maximum: 100, default: 1 } }
+        - { name: status, in: query, schema: { type: string, enum: [offline, available, busy, suspended] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Paginated drivers within radius, ordered by distance }
+        '400': { description: Invalid coordinate or radius }
+        '401': { description: Authentication required }
   /drivers/me/location:
     put:
       tags: [Tracking]
@@ -50,6 +68,8 @@ paths:
         - { name: latitude, in: query, required: true, schema: { type: number } }
         - { name: longitude, in: query, required: true, schema: { type: number } }
         - { name: radiusKm, in: query, schema: { type: number, minimum: 0, maximum: 100, default: 20 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
         '200': { description: Active drivers and their availability states }
         '403': { description: Operator or admin role required }

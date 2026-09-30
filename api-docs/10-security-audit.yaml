@@ -17,6 +17,7 @@ paths:
         - { name: from, in: query, schema: { type: string, format: date-time } }
         - { name: to, in: query, schema: { type: string, format: date-time } }
         - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
         '200': { description: Paginated audit log; records are read-only }
         '403': { description: Admin role required }
@@ -38,6 +39,24 @@ paths:
       responses:
         '200': { description: Database is reachable }
         '503': { description: Database is unavailable }
+  /ready:
+    get:
+      tags: [Security and Audit]
+      summary: Check whether the API is ready to receive traffic
+      operationId: getReadiness
+      x-fr-ids: [FR-SEC-05]
+      responses:
+        '200': { description: API and required dependencies are ready }
+        '503': { description: API or required dependency is not ready }
+  /health/services:
+    get:
+      tags: [Security and Audit]
+      summary: Check health of API services and dependencies
+      operationId: getServicesHealth
+      x-fr-ids: [FR-SEC-05]
+      responses:
+        '200': { description: All required services are healthy; response lists each component status }
+        '503': { description: At least one required service is unhealthy }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
