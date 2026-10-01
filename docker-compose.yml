@@ -1,0 +1,270 @@
+services:
+  # ==============================================================================
+  # 1. DATABASE & MESSAGING INFRASTRUCTURE
+  # ==============================================================================
+
+  cab-postgres:
+    image: postgres:16-alpine
+    container_name: cab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_cab_secret_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_MULTIPLE_DATABASES: "auth_db:auth_service:auth_pass_cab_2026,booking_db:booking_service:booking_pass_cab_2026,payment_db:payment_service:payment_pass_cab_2026"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    networks:
+      - cab-internal-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cab-app-db:
+    image: mongo:7.0
+    container_name: cab-app-db
+    restart: unless-stopped
+    volumes:
+      - mongo_app_data:/data/db
+      - ./infra/mongo/init-mongo-app.js:/docker-entrypoint-initdb.d/init-mongo-app.js:ro
+    networks:
+      - cab-internal-net
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand(\"ping\").ok' --quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cab-secure-db:
+    image: mongo:7.0
+    container_name: cab-secure-db
+    restart: unless-stopped
+    volumes:
+      - mongo_secure_data:/data/db
+      - ./infra/mongo/init-mongo-secure.js:/docker-entrypoint-initdb.d/init-mongo-secure.js:ro
+    networks:
+      - cab-secure-net
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand(\"ping\").ok' --quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cab-zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: cab-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - cab-internal-net
+
+  cab-kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: cab-kafka
+    restart: unless-stopped
+    depends_on:
+      - cab-zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: cab-zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://cab-kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - cab-internal-net
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==============================================================================
+  # 2. MICROSERVICES APPLICATION SERVICES
+  # ==============================================================================
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: cab-api-gateway
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - API_BASE_PATH=/api/v1
+      - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_key_at_least_32_bytes_cab_system_2026}
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - DRIVER_SERVICE_URL=http://driver-service:3002
+      - BOOKING_SERVICE_URL=http://booking-service:3003
+      - PAYMENT_SERVICE_URL=http://payment-service:3004
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3005
+      - ADMIN_SERVICE_URL=http://admin-service:3006
+    networks:
+      - cab-internal-net
+    depends_on:
+      - auth-service
+      - driver-service
+      - booking-service
+      - payment-service
+      - notification-service
+      - admin-service
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: apps/auth-service/Dockerfile
+    container_name: cab-auth-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DB_HOST=cab-postgres
+      - DB_PORT=5432
+      - DB_NAME=auth_db
+      - DB_USER=auth_service
+      - DB_PASSWORD=auth_pass_cab_2026
+      - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_key_at_least_32_bytes_cab_system_2026}
+    networks:
+      - cab-internal-net
+    depends_on:
+      cab-postgres:
+        condition: service_healthy
+
+  driver-service:
+    build:
+      context: .
+      dockerfile: apps/driver-service/Dockerfile
+    container_name: cab-driver-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - MONGODB_URI=mongodb://cab-app-db:27017/driver_db
+      - MONGODB_SECURE_URI=mongodb://cab-secure-db:27017/driver_secure_db
+      - KAFKA_BROKERS=cab-kafka:9092
+    networks:
+      - cab-internal-net
+      - cab-secure-net
+    depends_on:
+      cab-app-db:
+        condition: service_healthy
+      cab-secure-db:
+        condition: service_healthy
+      cab-kafka:
+        condition: service_healthy
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: apps/booking-service/Dockerfile
+    container_name: cab-booking-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - DB_HOST=cab-postgres
+      - DB_PORT=5432
+      - DB_NAME=booking_db
+      - DB_USER=booking_service
+      - DB_PASSWORD=booking_pass_cab_2026
+      - DRIVER_SERVICE_URL=http://driver-service:3002
+      - KAFKA_BROKERS=cab-kafka:9092
+    networks:
+      - cab-internal-net
+    depends_on:
+      cab-postgres:
+        condition: service_healthy
+      cab-kafka:
+        condition: service_healthy
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: apps/payment-service/Dockerfile
+    container_name: cab-payment-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=3004
+      - DB_HOST=cab-postgres
+      - DB_PORT=5432
+      - DB_NAME=payment_db
+      - DB_USER=payment_service
+      - DB_PASSWORD=payment_pass_cab_2026
+      - KAFKA_BROKERS=cab-kafka:9092
+    networks:
+      - cab-internal-net
+    depends_on:
+      cab-postgres:
+        condition: service_healthy
+      cab-kafka:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: apps/notification-service/Dockerfile
+    container_name: cab-notification-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=3005
+      - MONGODB_URI=mongodb://cab-app-db:27017/notification_db
+      - KAFKA_BROKERS=cab-kafka:9092
+    networks:
+      - cab-internal-net
+    depends_on:
+      cab-app-db:
+        condition: service_healthy
+      cab-kafka:
+        condition: service_healthy
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: apps/admin-service/Dockerfile
+    container_name: cab-admin-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=3006
+      - MONGODB_URI=mongodb://cab-app-db:27017/admin_db
+      - KAFKA_BROKERS=cab-kafka:9092
+    networks:
+      - cab-internal-net
+    depends_on:
+      cab-app-db:
+        condition: service_healthy
+      cab-kafka:
+        condition: service_healthy
+
+# ==============================================================================
+# NETWORKS & VOLUMES
+# ==============================================================================
+
+networks:
+  cab-internal-net:
+    driver: bridge
+  cab-secure-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+  mongo_app_data:
+  mongo_secure_data:
+  kafka_data:
+  zookeeper_data:
