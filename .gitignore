@@ -1,0 +1,39 @@
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs and runtime data
+*.log
+logs/
+tmp/
+temp/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build output and coverage
+dist/
+build/
+coverage/
+.next/
+.nuxt/
+
+# Local IDE and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Test and tool caches
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+# Local certificates and private keys
+*.pem
+*.key
+*.p12
+*.pfx

@@ -7,29 +7,45 @@
 - **Interactive Swagger UI:** `http://localhost:3000/api-docs`
 - **Tiêu chuẩn:** RESTful API, JSON Payload, JWT Bearer Authentication
 
+## Kiến trúc và route ownership
+
+Đây là các API public đi qua `api-gateway` với base URL ở trên; không gọi trực tiếp host/port của service. Các file `01`–`10` là nhóm tài liệu theo nghiệp vụ, không phải danh sách service độc lập. Runtime có sáu service phía sau Gateway:
+
+| Service sở hữu nghiệp vụ | Nhóm tài liệu chính |
+|---|---|
+| `auth-service` | `01-auth.yaml`; phần OTP và đăng ký tài khoản tài xế trong `02-driver-vehicle.yaml` |
+| `driver-service` | `02-driver-vehicle.yaml`, `06-tracking.yaml`, `08-rating.yaml` |
+| `booking-service` | `03-ride-booking.yaml`, `04-matching.yaml` |
+| `payment-service` | `05-payment.yaml` |
+| `notification-service` | `07-notification.yaml` |
+| `admin-service` | `09-admin.yaml` và endpoint audit trong `10-security-audit.yaml` |
+
+Health/readiness là trách nhiệm ingress của Gateway. Admin API chỉ đọc projection hoặc gửi command đến service sở hữu trạng thái; `admin-service` không cập nhật trực tiếp database nghiệp vụ. Notification nhận integration events qua Kafka và lưu inbox riêng; realtime delivery dùng Socket.IO.
+
 ---
 
 ## I. QUY CHUẨN CHUNG (GENERAL CONVENTIONS)
 
-### 1. Chuẩn hóa Định dạng Dữ liệu phản hồi (Response Format)
-Mọi API trong hệ thống đều trả về cấu trúc JSON đồng nhất:
+### 1. Định dạng phản hồi
+Schema và response code của từng endpoint trong `openapi.yaml` là hợp đồng chuẩn. Không giả định mọi endpoint đều trả cùng một JSON envelope; một số thao tác trả `204 No Content`.
 
-#### Phản hồi lỗi (Error Response):
+#### Ví dụ phản hồi thành công:
 ```json
 {
   "success": true,
-  "data": { ... },
-  "message": "Thông điệp mô tả kết quả xử lý"
+  "data": { "id": "resource-id" },
+  "message": "Request completed"
 }
 ```
-#### Phản hồi thành công (Success Response):
+#### Ví dụ phản hồi lỗi:
 ```json
 {
   "success": false,
-  "message": "Mô tả nguyên nhân lỗi",
-  "errors": [ ... ]
+  "message": "Request could not be processed",
+  "errors": [{ "field": "email", "code": "invalid_format" }]
 }
 ```
+Các ví dụ trên chỉ minh họa ý nghĩa success/error, không áp đặt envelope lên response schema chưa khai báo trong OpenAPI.
 ### 2. Các mã trạng thái HTTP (HTTP Status Codes)
 - 200 OK: Xử lý thành công yêu cầu GET, PUT, PATCH.
 
@@ -73,7 +89,7 @@ Authorization: Bearer <access_token>
 - Response (201 Created): { "description": "Customer account created" }
 #### 1.2 Đăng ký tài khoản Đối tác Tài xế
 - **Method:** POST
-- **Endpoint:** `/auth/register/driver` (yêu cầu OTP điện thoại hợp lệ)
+- **Endpoint:** `/auth/register/driver` (do `auth-service` sở hữu; yêu cầu verification token từ luồng OTP)
 - Truy xuất: FR-AUTH-02   
 Request Body:
 ```json
@@ -84,7 +100,16 @@ Request Body:
   "password": "Driver123",
   "licenseNumber": "123456789012",
   "licenseClass": "B2",
-  "licenseImageUrl": "[https://example.com/images/license.jpg](https://example.com/images/license.jpg)"
+  "licenseImageUrl": "https://example.com/images/license.jpg",
+  "verificationToken": "short-lived-otp-proof",
+  "vehicle": {
+    "plateNumber": "51H-123.45",
+    "brand": "Honda",
+    "model": "CR-V",
+    "color": "Black",
+    "vehicleType": "suv",
+    "seats": 7
+  }
 }
 ``` 
 - Response (201 Created): 

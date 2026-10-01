@@ -6,28 +6,61 @@
 
 ## 1. Quyết định kiến trúc
 
-CAB dùng microservice theo bounded context, triển khai bằng Docker Compose cho môi trường local. Client chỉ truy cập qua API Gateway. Mỗi service sở hữu collection/database của mình, không truy vấn trực tiếp MongoDB của service khác. Dữ liệu thường và dữ liệu nhạy cảm được đặt trên hai máy chủ MongoDB riêng biệt; chỉ service owner được cấp kết nối tới máy chủ dữ liệu nhạy cảm. Giao tiếp nội bộ đồng bộ dùng HTTP khi cần phản hồi ngay; workflow bất đồng bộ dùng RabbitMQ.
+CAB dùng microservice theo bounded context, triển khai bằng Docker Compose cho môi trường local. Client chỉ truy cập qua API Gateway. Mỗi service sở hữu database/schema/collection của mình, không truy vấn trực tiếp dữ liệu service khác. PostgreSQL phù hợp dữ liệu giao dịch và quan hệ; MongoDB phù hợp hồ sơ linh hoạt, vị trí và projection. Kafka vận chuyển event bất đồng bộ; notification-service tiêu thụ event để gửi thông báo. Kafka không thay thế database lưu hộp thư thông báo. Dữ liệu nhạy cảm được cô lập và chỉ service owner truy cập. Giao tiếp nội bộ đồng bộ dùng HTTP khi cần phản hồi ngay.
+
+### 1.1 Bounded context và đóng gói service
+
+Bảng dưới đây là danh sách bounded context và các gói backend được thiết kế cho MVP. Những context có vòng đời gắn chặt được đóng gói thành module trong cùng service để giảm số ứng dụng cần phát triển và vận hành.
+
+| Bounded context | Đóng gói trong MVP | Service/gói được thiết kế | Ghi chú phạm vi |
+|---|---|---|---|
+| Identity & Access | Service độc lập | `auth-service` | Đăng ký, OTP, đăng nhập, token/session và quyền truy cập. |
+| Driver & Fleet | Service độc lập | `driver-service` | Hồ sơ, xét duyệt, phương tiện, trạng thái tài xế và rating. |
+| Tracking & Geolocation | Module trong Driver | `driver-service` | Nhận GPS và vị trí mới nhất; booking dùng vị trí này khi tìm tài xế. |
+| Rating & Feedback | Module trong Driver | `driver-service` | Nhận đánh giá hợp lệ và cập nhật rating tài xế. |
+| Booking & Pricing | Module trong Booking | `booking-service` | Ước tính giá và tạo ride request. |
+| Matching & Dispatch | Module trong Booking | `booking-service` | Tìm candidate, gửi offer, timeout/retry và nhận tài xế atomic. |
+| Trip Execution | Module trong Booking | `booking-service` | Vòng đời chuyến, trạng thái, hủy và hoàn tất. |
+| Fare & Payment | Service độc lập | `payment-service` | Pricing config, tính cước cuối, thanh toán và callback. |
+| Notification Hub | Service độc lập | `notification-service` | Consume event từ Kafka, lưu inbox và gửi email/realtime. |
+| Administration & Analytics | Service độc lập | `admin-service` | API quản trị, audit và read projections; không sở hữu domain state. |
+| API ingress | Hạ tầng ứng dụng | `api-gateway` | Điểm vào duy nhất từ client, xác thực token và định tuyến request. |
+
+**Danh sách service backend:** `api-gateway`, `auth-service`, `driver-service`, `booking-service`, `payment-service`, `notification-service`, `admin-service`. MongoDB, PostgreSQL và Kafka là hạ tầng dữ liệu/messaging, không tính là backend service của domain.
 
 | Thành phần | Trách nhiệm chính | Data ownership |
 |---|---|---|
 | `api-gateway` | Entry point HTTP; route, JWT validation, RBAC coarse-grained, rate limit, correlation ID và chuẩn hóa lỗi | Không sở hữu domain data |
-| `auth-service` | Customer/Driver account, đăng ký, OTP, đăng nhập, token/session, hồ sơ người dùng cơ bản | `cab-secure-db.auth_secure_db`: account, refresh token, OTP/verification; dữ liệu hiển thị tối thiểu ở App DB |
-| `driver-service` | Hồ sơ tài xế, xét duyệt, phương tiện, trạng thái online/busy và vị trí hiện tại | `cab-secure-db.driver_secure_db`: PII/giấy tờ; trạng thái, metadata xe và vị trí hiện tại ở App DB |
-| `booking-service` | Ride/booking, dispatch, offer, matching retry và lifecycle chuyến | `rides`, `ride_offers`, trạng thái chuyến |
-| `payment-service` | Pricing config, fare, payment, provider callback và idempotency | `pricing_configs`, `payments`, idempotency records |
-| `review-service` | Đánh giá, rating trung bình và lịch sử chuyến đọc từ event projection | `rating_reviews`, `trip_history` projection |
-| `notification-service` | Hộp thư thông báo, email và Socket.IO delivery | `notifications`, delivery state |
-| `admin-service` | Dashboard/report queries, operator intervention workflow và audit log query/append | `audit_logs`, admin read projections; domain state vẫn thuộc service gốc |
-| `cab-app-db` (MongoDB server) | Dữ liệu nghiệp vụ vận hành | Database/collection tách theo service ownership; không chứa credential hoặc bản gốc giấy tờ định danh |
-| `cab-secure-db` (MongoDB server riêng) | Dữ liệu xác thực và PII/giấy tờ nhạy cảm | Chỉ `auth-service` và `driver-service` được truy cập; credentials riêng và quyền tối thiểu |
-| RabbitMQ | Integration event transport | Durable queues, retry và dead-letter queue |
+| `auth-service` | Customer/Driver account, đăng ký, OTP, đăng nhập, token/session, hồ sơ người dùng cơ bản | PostgreSQL `auth_db`: account, refresh token, OTP/verification; PII nhạy cảm được mã hóa |
+| `driver-service` | Hồ sơ tài xế, xét duyệt, phương tiện, trạng thái online/busy, vị trí hiện tại và rating | MongoDB `driver_db`: trạng thái, metadata xe, vị trí hiện tại, đánh giá; Secure MongoDB `driver_secure_db`: PII/giấy tờ |
+| `booking-service` | Ride/booking, dispatch, offer, matching retry và lifecycle chuyến | PostgreSQL `booking_db`: rides, offers và trạng thái chuyến |
+| `payment-service` | Pricing config, fare, payment, provider callback và idempotency | PostgreSQL `payment_db`: pricing, payments và idempotency records |
+| `notification-service` | Hộp thư thông báo, email và Socket.IO delivery | MongoDB `notification_db`: notifications, delivery state; Kafka consumer |
+| `admin-service` | Dashboard/report queries, operator intervention workflow và audit log query/append | MongoDB `admin_db`: audit logs, admin read projections; domain state vẫn thuộc service gốc |
+| `cab-app-db` (MongoDB server) | Dữ liệu hồ sơ, vị trí, notification và projections | Database/collection tách theo service ownership; không chứa credential hoặc bản gốc giấy tờ định danh |
+| `cab-secure-db` (MongoDB server riêng) | PII/giấy tờ tài xế | Chỉ `driver-service` được truy cập; credentials riêng và quyền tối thiểu |
+| `cab-postgres` (PostgreSQL server) | Database riêng cho Auth, Booking và Payment | Role/database tách riêng theo service |
+| `cab-kafka` | Integration event transport | Topics theo event type; notification-service consume event; retry/DLQ qua retry topic và dead-letter topic |
 
 `admin-service` là phần bổ sung để có nơi triển khai các API quản trị/audit đang có trong `api-docs/09-admin.yaml` và `10-security-audit.yaml`. Nó không được sửa trực tiếp dữ liệu của service nghiệp vụ; mọi thay đổi được gửi bằng API command tới owner service.
 
-### 1.1 Cấu trúc source code đề xuất
+### 1.2 Data service type
+
+| Service | Data service type | Dữ liệu chính | Vì sao chọn |
+|---|---|---|---|
+| `auth-service` | PostgreSQL (`auth_db`) | Account, refresh session, OTP/verification | Unique email/SĐT, cập nhật session và OTP cần transaction, constraint và index. |
+| `driver-service` | MongoDB (`driver_db` + Secure MongoDB) | Hồ sơ/xe, trạng thái, vị trí, rating; PII/giấy tờ trong Secure DB | Hồ sơ linh hoạt theo loại xe/tài xế; GeoJSON và geospatial index hỗ trợ tìm tài xế gần đó. |
+| `booking-service` | PostgreSQL (`booking_db`) | Ride, offer, matching state, lifecycle, history | Accept/gán tài xế cần transaction và cập nhật có điều kiện để bảo đảm một ride chỉ nhận một tài xế. |
+| `payment-service` | PostgreSQL (`payment_db`) | Pricing, payment, callback/idempotency | Giao dịch tiền cần transaction, unique constraint và tính nhất quán để đối soát. |
+| `notification-service` | Kafka + MongoDB (`notification_db`) | Kafka nhận domain events; MongoDB lưu inbox, trạng thái đọc và delivery | Kafka tách gửi thông báo khỏi luồng nghiệp vụ, hấp thụ burst; MongoDB lưu document linh hoạt và truy vấn inbox theo user. |
+| `admin-service` | MongoDB (`admin_db`) | Audit log, dashboard/report projections | Read model linh hoạt, append-oriented và rebuild được từ event. |
+
+Kafka là message broker, không phải database. Notification-service lưu bản ghi cần hiển thị trong MongoDB sau khi consume event từ Kafka. Mỗi service chỉ truy cập database mình sở hữu.
+
+### 1.3 Cấu trúc source code đề xuất
 
 ```text
-cab-system/
+23732061_MaiQuocHung_CabSystem/
   apps/
     customer-web/
     driver-web/
@@ -38,7 +71,6 @@ cab-system/
     driver-service/
     booking-service/
     payment-service/
-    review-service/
     notification-service/
     admin-service/
   packages/
@@ -48,7 +80,7 @@ cab-system/
   infra/
     docker-compose.yml
     gateway/
-    rabbitmq/
+    kafka/
   api-docs/
   postman/
   .env.example
@@ -58,7 +90,7 @@ Mỗi backend service giữ cấu trúc nhất quán `src/routes`, `src/controll
 
 ## 2. Bounded Context và quy trình nghiệp vụ
 
-### 2.1 Phân rã domain và ánh xạ service
+### 2.1 Chi tiết phân rã domain và ánh xạ service
 
 Bounded Context xác định ranh giới mô hình nghiệp vụ; trong MVP, một service có thể triển khai nhiều context có vòng đời gắn chặt để giảm chi phí vận hành. Do đó, Booking, Matching/Dispatch và Trip Execution cùng chạy trong `booking-service`, nhưng được tổ chức thành module domain riêng. Chúng có thể tách thành service độc lập khi tải, ownership hoặc nhu cầu triển khai riêng biệt tăng lên.
 
@@ -71,7 +103,7 @@ Bounded Context xác định ranh giới mô hình nghiệp vụ; trong MVP, m�
 | Trip Execution | Core | `booking-service` (module riêng) | Vòng đời ride/trip, mốc thời gian, hủy và xử lý sự cố. |
 | Tracking & Geolocation | Supporting | `driver-service` ở MVP | Thu GPS và vị trí mới nhất; phát vị trí chuyến qua Socket.IO. Tách riêng nếu cần scale/retention GPS độc lập. |
 | Fare & Payment | Supporting | `payment-service` | Cấu hình giá, tính cước cuối, payment, callback và đối soát. |
-| Rating & Feedback | Supporting | `review-service` | Đánh giá, rating trung bình và projection lịch sử. |
+| Rating & Feedback | Supporting | `driver-service` (module riêng) | Nhận đánh giá sau chuyến, tính rating tài xế; booking history vẫn do booking service sở hữu. |
 | Notification Hub | Generic | `notification-service` | Hộp thư, email và gửi thông báo realtime từ events. |
 | Administration & Analytics | Generic | `admin-service` | API quản trị, audit log và read projections; không sở hữu trạng thái nghiệp vụ gốc. |
 
@@ -91,36 +123,81 @@ Bounded Context xác định ranh giới mô hình nghiệp vụ; trong MVP, m�
 
 ```mermaid
 flowchart LR
-    Client[Customer / Driver / Admin Web] --> Gateway[API Gateway]
-    Gateway --> Auth[Auth Service]
-    Gateway --> Driver[Driver Service]
-    Gateway --> Booking[Booking Service]
-    Gateway --> Payment[Payment Service]
-    Gateway --> Review[Review Service]
-    Gateway --> Admin[Admin Service]
-    Gateway --> Notify[Notification Service]
-    Auth --> MQ[(RabbitMQ)]
-    Driver --> MQ
-    Booking --> MQ
-    Payment --> MQ
-    Review --> MQ
-    Admin --> MQ
+    Client["Customer / Driver / Admin Web"]
+    Gateway["API Gateway"]
+
+    Client --> Gateway
+
+    subgraph SERVICES["Microservices"]
+        Auth["Auth Service"]
+        Driver["Driver Service"]
+        Booking["Booking Service"]
+        Payment["Payment Service"]
+        Admin["Admin Service"]
+        Notify["Notification Service"]
+    end
+
+    Gateway --> Auth
+    Gateway --> Driver
+    Gateway --> Booking
+    Gateway --> Payment
+    Gateway --> Admin
+    Gateway --> Notify
+
+    subgraph POSTGRES["PostgreSQL - database per service"]
+        AuthDB[("auth_db")]
+        BookingDB[("booking_db")]
+        PaymentDB[("payment_db")]
+    end
+
+    subgraph MONGO["MongoDB - database per service"]
+        DriverDB[("driver_db")]
+        AdminDB[("admin_db")]
+        NotifyDB[("notification_db")]
+    end
+
+    Auth --> AuthDB
+    Driver --> DriverDB
+    Booking --> BookingDB
+    Payment --> PaymentDB
+    Admin --> AdminDB
+    Notify --> NotifyDB
+
+    subgraph SECURE["Secure MongoDB Server"]
+        DriverSecure[("driver_secure_db")]
+    end
+
+    Driver --> DriverSecure
+
+    MQ[["Kafka<br/>Event broker"]]
+
+    Auth <--> MQ
+    Driver <--> MQ
+    Booking <--> MQ
+    Payment <--> MQ
+    Admin <--> MQ
     MQ --> Notify
-    MQ --> Review
     MQ --> Admin
-    Auth --> Mongo[(MongoDB - DB per service)]
-    Driver --> Mongo
-    Booking --> Mongo
-    Payment --> Mongo
-    Review --> Mongo
-    Notify --> Mongo
-    Admin --> Mongo
-    Auth --> SecureAuth[(Secure MongoDB Server<br/>auth_secure_db)]
-    Driver --> SecureDriver[(Secure MongoDB Server<br/>driver_secure_db)]
-    Notify --> Socket[Socket.IO]
+
+    Notify --> Socket["Socket.IO"]
     Socket --> Client
-    Payment --> PGW[Mock Payment Provider]
-    Booking --> Map[Map Provider]
+
+    Payment --> PGW["Mock Payment Provider"]
+    Booking --> Map["Map Provider"]
+
+    classDef client fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef service fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef database fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef secure fill:#fee2e2,stroke:#dc2626,color:#991b1b
+    classDef broker fill:#ffedd5,stroke:#ea580c,color:#9a3412
+    classDef external fill:#f3e8ff,stroke:#9333ea,color:#581c87
+
+    class Client,Gateway client
+    class Auth,Driver,Booking,Payment,Admin,Notify service
+    class AuthDB,DriverDB,BookingDB,PaymentDB,AdminDB,NotifyDB database
+    class DriverSecure secure
+    class MQ broker
+    class Socket,PGW,Map external
 ```
 
 ### 2.4 Luồng đặt xe đến đánh giá
@@ -132,7 +209,7 @@ flowchart LR
 5. Driver nhận offer. Accept phải atomic: một ride chỉ gán một driver. Ride chuyển sang `accepted`; driver chuyển `busy`.
 6. Driver cập nhật tuần tự `driver_arrived` → `in_progress` → `completed`, đồng thời gửi GPS. Customer theo dõi qua API/Socket.IO.
 7. Khi ride hoàn tất, booking service phát `RideCompleted`. Payment service lấy pricing hiện hành, tạo fare/payment. Thanh toán điện tử hoàn tất qua callback có chữ ký; tiền mặt do driver xác nhận.
-8. Sau payment `COMPLETED`, customer gửi rating. Review service tạo một review cho mỗi ride và cập nhật rating/projection lịch sử.
+8. Sau payment `COMPLETED`, customer gửi rating. Rating module trong driver-service tạo một review cho mỗi ride và cập nhật rating tổng hợp của tài xế. Booking history tiếp tục lấy từ booking service.
 9. Notification, admin/reporting projections và audit xử lý event độc lập. Lỗi gửi email không rollback ride hoặc payment.
 
 ### 2.5 Aggregate và invariant nghiệp vụ
@@ -143,13 +220,13 @@ flowchart LR
 | Driver & Fleet | `DriverProfile`, `Vehicle` | Chỉ tài xế approved/active mới online; plate/license duy nhất; Busy không nhận offer mới |
 | Booking, Dispatch & Trip | `Ride` | Chuyển trạng thái tuần tự; một tài xế được gán; mỗi thời điểm chỉ có một offer đang chờ; retry tối đa 5; kiểm tra customer/driver ownership; snapshot estimate. |
 | Fare & Payment | `Payment`, `PricingConfig` | Payment gắn duy nhất một ride; amount không âm; fare giữ snapshot/version bảng giá; không lưu dữ liệu thẻ; callback/idempotency không xử lý giao dịch hai lần. |
-| Review & History | `RatingReview`, history projection | Ride đã completed và payment completed; một review mỗi ride; history là projection |
+| Rating & Feedback | `RatingReview`, driver rating | Ride đã completed và payment completed; một review mỗi ride; rating tổng hợp cập nhật từ các review. Driver-service xác minh điều kiện đánh giá qua API nội bộ hoặc event, không truy cập database booking/payment. |
 | Notification | `Notification` | Người dùng chỉ đọc/cập nhật thông báo của mình; delivery retry không tạo bản ghi trùng |
 | Administration & Audit | `AuditLog`, report projection | Audit append-only; intervention đi qua domain owner và ghi actor/reason |
 
 `CustomerId`, `DriverId`, `RideId`, `PaymentId` là ID tham chiếu giữa context, không phải shared entity hay quan hệ database cross-service.
 
-Invariant xuyên context không được thực thi bằng transaction MongoDB chung. Ví dụ, thao tác accept dùng conditional atomic update ở owner của ride; đổi trạng thái tài xế thực hiện qua API/command/event có kiểm soát. Nếu bước phụ lỗi, consumer retry hoặc quy trình bù xử lý trạng thái, không ghi trực tiếp vào database service khác.
+Invariant xuyên context không được thực thi bằng transaction database chung. Ví dụ, thao tác accept dùng transaction/conditional update ở PostgreSQL của booking-service; đổi trạng thái tài xế thực hiện qua API/command/event có kiểm soát. Nếu bước phụ lỗi, consumer retry hoặc quy trình bù xử lý trạng thái, không ghi trực tiếp vào database service khác.
 
 ## 3. Service contracts
 
@@ -204,11 +281,11 @@ Tất cả public API đi qua Gateway với base URL `http://localhost:3000/api/
 | `POST /rides/{rideId}/payment/cash-confirmation` | FR-PAY-03, FR-PAY-04 | Chỉ driver được gán xác nhận tiền mặt |
 | `POST /payments/{paymentId}/callback` | FR-PAY-05, FR-PAY-06 | Xác minh provider signature/timestamp và chống replay |
 
-### 3.5 Review, Notification, Administration services
+### 3.5 Rating, Notification, Administration APIs
 
 | Service | API chính | FR chính |
 |---|---|---|
-| `review-service` | `POST /rides/{rideId}/rating`, `GET /drivers/{driverId}/ratings` | FR-RATE-01 → FR-RATE-03 |
+| `driver-service` (rating module) | `POST /rides/{rideId}/rating`, `GET /drivers/{driverId}/ratings` | FR-RATE-01 → FR-RATE-03 |
 | `notification-service` | `GET /notifications`, `POST /notifications/read-all`, `PUT /notifications/{notificationId}/read`; Socket.IO delivery | FR-NOTIF-01 → FR-NOTIF-05 |
 | `admin-service` | `/admin/dashboard`, `/admin/customers`, `/admin/drivers`, `/admin/rides`, `/admin/payments`, `/admin/reports/*`, `/admin/audit-logs`, `/health*` | FR-ADM-01 → FR-ADM-08, FR-SEC-03 → FR-SEC-05 |
 
@@ -216,19 +293,18 @@ Tất cả public API đi qua Gateway với base URL `http://localhost:3000/api/
 
 ## 4. Data ownership và persistence
 
-MVP thống nhất MongoDB như SRS. Tách database hoặc ít nhất tách collection/user credentials theo service; không coi một MongoDB cluster là một database dùng chung. Một service không được gọi `db.collection` của service khác.
+Mỗi service có database riêng theo data service type ở mục 1.1. PostgreSQL databases có thể nằm trên cùng server `cab-postgres`, nhưng mỗi service dùng database/user riêng. MongoDB databases/collections cũng tách theo owner; Secure MongoDB chỉ chứa dữ liệu tài xế nhạy cảm. Một service không truy vấn trực tiếp database của service khác.
 
-| Service | MongoDB data | Ghi chú |
-|---|---|---|
-| Auth | App DB: profile hiển thị tối thiểu. Secure DB: `accounts`, `refresh_tokens`, `otp_verifications` | Email/SĐT đăng nhập, password hash, refresh token và OTP hash ở Secure DB; OTP có TTL và giới hạn lần thử. |
-| Driver | App DB: `driver_profiles` trạng thái/approval, `vehicles` metadata, `driver_locations`. Secure DB: `driver_private_profiles`, thông tin GPLX/định danh và document references | PII và giấy tờ gốc chỉ truy cập qua `driver-service`; `currentLocation` GeoJSON Point có 2dsphere index ở App DB. |
-| Booking | `rides`, `ride_offers`, `processed_events` | Ride aggregate giữ state/offer state; state transition có optimistic concurrency |
-| Payment | `pricing_configs`, `payments`, `idempotency_records`, `processed_events` | Unique payment theo ride; idempotency theo actor/operation/key |
-| Review | `rating_reviews`, `trip_history`, `processed_events` | Unique `rideId` cho rating; history rebuild được từ events |
-| Notification | `notifications`, `notification_deliveries`, `processed_events` | Index `(userId, isRead, createdAt)` |
-| Admin | `audit_logs`, `admin_projections`, `processed_events` | Audit append-only; projection có thể rebuild |
+| Service | Data service type | Dữ liệu sở hữu | Ràng buộc/index chính |
+|---|---|---|---|
+| Auth | PostgreSQL `auth_db` | `accounts`, `refresh_tokens`, `otp_verifications` | Unique email/SĐT; OTP hết hạn/giới hạn thử; password hash, refresh token/OTP hash. |
+| Driver | MongoDB `driver_db` + Secure MongoDB `driver_secure_db` | `driver_profiles`, `vehicles`, `driver_locations`, `rating_reviews`, `driver_private_profiles` | Unique plate/license/rideId; GeoJSON `currentLocation` có 2dsphere index; PII/giấy tờ chỉ qua driver-service. |
+| Booking | PostgreSQL `booking_db` | `rides`, `ride_offers`, `processed_events` | Transaction/conditional update cho accept atomic; unique active assignment; pagination indexes theo customer/driver và createdAt. |
+| Payment | PostgreSQL `payment_db` | `pricing_configs`, `payments`, `idempotency_records`, `processed_events` | Unique payment theo ride; idempotency theo actor/operation/key; amount và trạng thái cập nhật transactionally. |
+| Notification | MongoDB `notification_db`; Kafka consumer | `notifications`, `notification_deliveries`, consumer offsets do Kafka quản lý | Index `(userId, isRead, createdAt)`; consume idempotent theo `eventId`. |
+| Admin | MongoDB `admin_db` | `audit_logs`, `admin_projections`, `processed_events` | Audit append-only; projection có thể rebuild từ Kafka events. |
 
-Mỗi service tạo unique/compound/TTL/geospatial index thuộc dữ liệu nó sở hữu. Không thiết kế MongoDB foreign key giả; service giữ ID và xác minh quyền qua API/event phù hợp.
+Kafka lưu/luân chuyển event theo retention policy, không phải nguồn lưu trữ hồ sơ hay inbox. PostgreSQL dùng constraint/transaction cho dữ liệu cần tính nhất quán; MongoDB dùng document và geospatial index cho hồ sơ/vị trí/projection.
 
 ## 5. Giao tiếp đồng bộ và bất đồng bộ
 
@@ -236,9 +312,9 @@ Mỗi service tạo unique/compound/TTL/geospatial index thuộc dữ liệu nó
 
 Dùng cho thao tác cần kết quả tức thời: Gateway → service; booking → driver search; payment → pricing/fare; admin → domain command. Internal service endpoints chỉ bind private Docker network. Timeout phải hữu hạn và lỗi upstream được map thành lỗi API ổn định.
 
-### 5.2 RabbitMQ integration events
+### 5.2 Kafka integration events
 
-Dùng topic exchange `cab.events` với routing key theo `context.event-name.vN`, ví dụ `booking.created.v1`. Event là sự kiện đã xảy ra; không dùng event để gửi command. Envelope tối thiểu:
+Dùng topic `cab.events` với event type theo `context.event-name.vN`, ví dụ `booking.created.v1`. Event là sự kiện đã xảy ra; không dùng event để gửi command. Consumer group tách theo service; notification-service có consumer group riêng để gửi và lưu thông báo. Envelope tối thiểu:
 
 ```json
 {
@@ -260,14 +336,14 @@ Dùng topic exchange `cab.events` với routing key theo `context.event-name.vN`
 | `driver.availability-changed.v1` | Driver | Booking matching index, Admin projection |
 | `booking.created.v1` | Booking | Matching module, Notification, Admin projection |
 | `dispatch.offer-sent.v1`, `dispatch.offer-declined.v1`, `dispatch.exhausted.v1` | Booking | Notification, Booking workflow, Admin projection |
-| `ride.accepted.v1`, `ride.status-changed.v1`, `ride.cancelled.v1`, `ride.completed.v1` | Booking | Driver state projection, Tracking, Payment, Review eligibility, Notification, Admin projection |
-| `payment.completed.v1`, `payment.failed.v1` | Payment | Review eligibility, Notification, Admin projection |
-| `rating.submitted.v1` | Review | Driver rating projection, Notification, Admin projection |
+| `ride.accepted.v1`, `ride.status-changed.v1`, `ride.cancelled.v1`, `ride.completed.v1` | Booking | Driver state projection, Tracking, Payment, Rating eligibility, Notification, Admin projection |
+| `payment.completed.v1`, `payment.failed.v1` | Payment | Rating eligibility, Notification, Admin projection |
+| `rating.submitted.v1` | Driver (rating module) | Notification, Admin projection; driver-service tự cập nhật rating trong database của mình |
 | `audit.recorded.v1` | Domain services/Admin | Admin audit store/monitoring; bản ghi audit append-only |
 
-Các event vị trí GPS tần suất cao không nên phát tràn qua RabbitMQ trong MVP. GPS đi qua Socket.IO đến tracking path; chỉ trạng thái/điểm cần cho matching và reporting mới phát event có kiểm soát.
+Các event vị trí GPS tần suất cao không nên phát tràn qua Kafka trong MVP. GPS đi qua Socket.IO đến tracking path; chỉ trạng thái/điểm cần cho matching và reporting mới phát event có kiểm soát.
 
-Publisher dùng Outbox pattern hoặc cơ chế tương đương để không commit dữ liệu mà mất event. Consumer phải idempotent theo `eventId`, retry hữu hạn, chuyển message poison vào dead-letter queue và ghi correlation ID. Event chỉ chứa dữ liệu tối thiểu; tuyệt đối không gửi password, OTP plaintext, PAN/CVV hoặc JWT.
+Publisher dùng Outbox pattern hoặc cơ chế tương đương để không commit dữ liệu mà mất event. Consumer phải idempotent theo `eventId`, retry hữu hạn, chuyển event poison sang dead-letter topic và ghi correlation ID. Event chỉ chứa dữ liệu tối thiểu; tuyệt đối không gửi password, OTP plaintext, PAN/CVV hoặc JWT.
 
 ### 5.3 Saga cho booking-to-payment
 
@@ -278,12 +354,12 @@ Booking/Dispatch/Trip nằm cùng booking service ở MVP nên lifecycle chuyế
 Gateway là ingress duy nhất từ client. Nó xác thực JWT signature/issuer/audience/expiry, giới hạn kích thước payload, rate limit, gắn `X-Correlation-ID`, route theo `/api/v1` và không phát lộ service host. Domain service vẫn kiểm tra role và resource ownership để chống IDOR; không tin role/user ID do client tự gửi.
 
 - Password hash bằng bcrypt hoặc Argon2id; không log password/token/OTP.
-- `cab-secure-db` chạy trên MongoDB server/cluster riêng trong private subnet/security group tách biệt với App DB. Không publish port ra Internet/host; firewall chỉ cho phép `auth-service` và `driver-service` kết nối đúng port DB.
-- Tạo database user riêng cho từng service (`auth_service_rw`, `driver_service_rw`) và giới hạn quyền theo database/collection; ứng dụng không dùng root/admin credential. Secrets được mount từ secret manager hoặc Docker secrets, không nhúng vào image, compose plaintext hay Git.
+- `cab-secure-db` chạy trên MongoDB server/cluster riêng trong private subnet/security group tách biệt với App DB. Không publish port ra Internet/host; firewall chỉ cho phép `driver-service` kết nối đúng port DB.
+- Tạo database user riêng cho từng service (PostgreSQL roles và MongoDB users) và giới hạn quyền theo database/schema/collection; ứng dụng không dùng root/admin credential. Secrets được mount từ secret manager hoặc Docker secrets, không nhúng vào image, compose plaintext hay Git.
 - Bật TLS cho kết nối service→Secure DB; mã hóa disk và backup; mã hóa trường PII cần đọc lại bằng authenticated encryption, với key lưu/rotate độc lập DB. Bật audit log truy cập dữ liệu nhạy cảm và đặt retention theo chính sách dữ liệu.
 - API chỉ trả dữ liệu cần thiết, mask PII theo vai trò/mục đích. Service khác nhận opaque ID hoặc projection tối thiểu qua API/event; không đọc Secure DB trực tiếp. Event/audit không chứa password, token, OTP, ảnh giấy tờ hay PII không cần thiết.
 - Dữ liệu nhạy cảm cần đọc lại được mã hóa at rest bằng authenticated encryption; key không nằm cùng DB/repository và phải hỗ trợ xoay key. Hash password không phải encryption.
-- MongoDB query phải dùng ODM/allowlist an toàn, reject operator injection; mọi text output được escape để ngăn XSS.
+- MongoDB query phải dùng ODM/allowlist an toàn, reject operator injection; PostgreSQL query phải parameterize; mọi text output được escape để ngăn XSS.
 - Checkout bắt buộc `Idempotency-Key`; provider callback kiểm tra HMAC/signature, timestamp và transaction ID. Key lặp payload khác trả 409; cùng payload trả response lưu trước đó.
 - Rate limit theo user/IP; vượt ngưỡng trả 429 và `Retry-After`.
 - Log JSON có `service`, `requestId`, `correlationId`, `userId` (nếu phù hợp), latency và error code; loại bỏ PII không cần thiết.
@@ -291,16 +367,16 @@ Gateway là ingress duy nhất từ client. Nó xác thực JWT signature/issuer
 
 ## 7. Docker Compose và triển khai local
 
-Compose tối thiểu gồm `api-gateway`, bảy service backend ở bảng ownership, `cab-app-db`, `cab-secure-db`, `rabbitmq`; ba web app có thể chạy bằng profile riêng. Chỉ Gateway publish API port ra host. App DB, Secure DB, RabbitMQ và backend nằm trong private network; Secure DB ở network segment riêng, chỉ Auth/Driver có route và credentials. Không publish port Secure DB. MongoDB dùng named volume; service có healthcheck/restart policy và chỉ start traffic khi dependency cần thiết healthy. Production đặt hai DB server trong private subnets/security groups riêng; backup Secure DB được mã hóa bằng key độc lập.
+Compose tối thiểu gồm `api-gateway`, sáu service backend, `cab-app-db`, `cab-secure-db`, `cab-postgres`, `cab-kafka`; ba web app có thể chạy bằng profile riêng. Chỉ Gateway publish API port ra host. Databases, Kafka và backend nằm trong private network; Secure DB ở network segment riêng, chỉ Driver có route và credentials. Không publish port Secure DB. MongoDB/PostgreSQL dùng named volume; service có healthcheck/restart policy và chỉ start traffic khi dependency cần thiết healthy. Production đặt database servers và Kafka trong private subnets/security groups; backup Secure DB được mã hóa bằng key độc lập.
 
-Biến môi trường thật nằm ngoài Git. `.gitignore` loại `.env`, `.env.*` trừ `.env.example`, log, build và dependency output. `.env.example` chỉ chứa placeholder. JWT signing key, Mongo credentials, Rabbit credentials và provider secrets không được ghi vào compose hoặc source code dạng plaintext.
+Biến môi trường thật nằm ngoài Git. `.gitignore` loại `.env`, `.env.*` trừ `.env.example`, log, build và dependency output. `.env.example` chỉ chứa placeholder. JWT signing key, MongoDB/PostgreSQL credentials, Kafka credentials và provider secrets không được ghi vào compose hoặc source code dạng plaintext.
 
 Kiểm tra local theo thứ tự:
 
 1. `docker compose up --build` – build/start stack.
 2. `docker compose ps` – xem container và health status.
 3. Gọi qua Gateway: `GET /health`, `/ready`, `/health/services`.
-4. Xác nhận service ports và cả hai MongoDB không được expose trực tiếp ra host; chỉ Auth/Driver kết nối được Secure DB.
+4. Xác nhận database/Kafka ports không được expose trực tiếp ra host; chỉ Driver kết nối được Secure DB và mỗi service chỉ kết nối database mình sở hữu.
 5. Chạy Postman smoke flow: customer register/login → driver OTP/application/approval/online → booking/offer/ride → payment callback → review.
 
 ## 8. Quy ước trạng thái và lưu ý triển khai
@@ -308,8 +384,8 @@ Kiểm tra local theo thứ tự:
 - Public ride status dùng các giá trị trong SRS/API: `requested`, `searching`, `accepted`, `driver_arrived`, `in_progress`, `completed`, `cancelled`/cancellation actor, `no_driver`. API cancellation phải ánh xạ thành `CANCELED` nếu cần theo phiếu chấm; lưu riêng `cancelledBy` và `cancelReason`.
 - Driver public availability: `offline`, `available`, `busy`, `suspended`. Client chỉ yêu cầu offline/available; system sở hữu chuyển busy/available khi assign/end/cancel.
 - Vehicle type: `sedan`, `suv`, `van`; payment status: `PENDING`, `COMPLETED`, `FAILED`, `REFUNDED`.
-- MongoDB là persistence MVP; PostgreSQL, Redis Geo, Kafka, ClickHouse và search engine không phải dependency bắt buộc trong phiên bản này.
-- Socket.IO cung cấp realtime; RabbitMQ vận chuyển integration events. Hai cơ chế này có mục đích khác nhau, không thay thế nhau.
+- PostgreSQL lưu account, booking và payment; MongoDB lưu driver data, notifications và admin projections; Kafka vận chuyển integration events. Redis Geo, ClickHouse và search engine không phải dependency bắt buộc.
+- Socket.IO cung cấp realtime; Kafka vận chuyển integration events. Hai cơ chế này có mục đích khác nhau, không thay thế nhau.
 - Bounded context là ranh giới domain logic; không bắt buộc mỗi subdomain nhỏ thành một process/service riêng. Tách service mới chỉ khi có lý do về ownership, scale, reliability hoặc team boundary.
 
 ## 9. Đối chiếu với yêu cầu
@@ -318,7 +394,7 @@ Kiểm tra local theo thứ tự:
 |---|---|
 | API Gateway là điểm vào duy nhất | Mục 1, 6, 7 |
 | Microservice và data ownership | Mục 1, 2, 4 |
-| IPC và message broker | HTTP + RabbitMQ ở mục 5 |
+| IPC và message broker | HTTP + Kafka ở mục 5 |
 | Health/readiness | Mục 3.5, 6, 7 |
 | Payment callback/idempotency | Mục 3.4, 5.3, 6 |
 | Nearby drivers, booking history/pagination | Mục 3.2 và API spec |
@@ -327,4 +403,4 @@ Kiểm tra local theo thứ tự:
 
 ## 10. Kết luận
 
-MVP giữ bảy service domain/application phía sau Gateway, MongoDB làm persistence và RabbitMQ cho integration events. Booking service hợp nhất booking, matching và trip lifecycle để giảm distributed transaction; Payment service sở hữu pricing/payment; Review service sở hữu rating/history projection; Admin service cung cấp quản trị/audit mà không chiếm quyền sở hữu domain data. Ranh giới này khớp hơn với SRS và API hiện tại, đồng thời vẫn giữ khả năng tách thêm bounded context khi nhu cầu thực tế xuất hiện.
+MVP giữ sáu service domain/application phía sau Gateway. PostgreSQL lưu dữ liệu giao dịch Auth/Booking/Payment; MongoDB lưu driver, notification và admin data; Kafka chuyển integration events, đặc biệt để notification-service gửi thông báo độc lập. Booking service hợp nhất booking, matching và trip lifecycle; Driver service quản lý hồ sơ, vị trí và rating tài xế; Admin service cung cấp quản trị/audit mà không chiếm quyền sở hữu domain data. Cách phân loại giữ database phù hợp với dạng dữ liệu và tránh tạo service rating riêng.

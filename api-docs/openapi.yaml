@@ -3,23 +3,34 @@ openapi: 3.0.3
 info:
   title: CAB System API
   version: 1.0.0
-  description: Aggregate entry point for the CAB System API. Module path items are
-    represented as a complete single-file OpenAPI document. Keep this file synchronized
-    with the modular specifications.
+  description: Aggregate public API contract for the CAB System. All client traffic enters
+    through api-gateway. Feature files are documentation modules, not independently
+    deployed services. Runtime ownership is indicated by the tag descriptions. Keep this
+    file synchronized with the modular specifications.
 servers:
 - url: http://localhost:3000/api/v1
   description: Local development server
 tags:
 - name: Authentication
+  description: Account, OTP, session, and profile operations owned by auth-service.
 - name: Drivers and Vehicles
+  description: Driver profile, fleet, availability, and approval operations owned by driver-service.
 - name: Rides
+  description: Booking and trip lifecycle operations owned by booking-service.
 - name: Matching
+  description: Matching and dispatch module within booking-service.
 - name: Payments
+  description: Pricing and payment operations owned by payment-service.
 - name: Tracking
+  description: Driver location and tracking operations owned by driver-service.
 - name: Notifications
+  description: Notification inbox and delivery operations owned by notification-service.
 - name: Ratings
+  description: Rating module within driver-service.
 - name: Administration
+  description: Admin read models and audited commands owned by admin-service; domain changes are delegated to the owning service.
 - name: Security and Audit
+  description: Audit operations owned by admin-service; health and readiness are exposed through api-gateway.
 paths:
   "/auth/register/customer":
     post:
@@ -314,23 +325,6 @@ paths:
       responses:
         '200':
           description: Vehicle list
-  "/drivers/{driverId}":
-    get:
-      tags: [Drivers and Vehicles]
-      summary: Get a driver profile by ID
-      operationId: getDriverById
-      x-fr-ids: [FR-DRV-05]
-      security: [{ bearerAuth: [] }]
-      parameters:
-      - name: driverId
-        in: path
-        required: true
-        schema: { type: string }
-      responses:
-        '200': { description: Driver profile and active vehicle details without private documents }
-        '401': { description: Authentication required }
-        '403': { description: Caller is not authorized to view this driver }
-        '404': { description: Driver not found }
     post:
       tags:
       - Drivers and Vehicles
@@ -380,6 +374,23 @@ paths:
           description: Vehicle registered
         '409':
           description: Plate number already exists
+  "/drivers/{driverId}":
+    get:
+      tags: [Drivers and Vehicles]
+      summary: Get a driver profile by ID
+      operationId: getDriverById
+      x-fr-ids: [FR-DRV-05]
+      security: [{ bearerAuth: [] }]
+      parameters:
+      - name: driverId
+        in: path
+        required: true
+        schema: { type: string }
+      responses:
+        '200': { description: Driver profile and active vehicle details without private documents }
+        '401': { description: Authentication required }
+        '403': { description: Caller is not authorized to view this driver }
+        '404': { description: Driver not found }
   "/drivers/me/status":
     put:
       tags:
