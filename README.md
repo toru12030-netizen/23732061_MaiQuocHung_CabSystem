@@ -7,7 +7,7 @@
 [![Message Broker](https://img.shields.io/badge/Messaging-Apache_Kafka-231F20.svg)](https://kafka.apache.org/)
 [![Tests Passing](https://img.shields.io/badge/Automated_Tests-100%25_PASS_(30%2F30%20%2B%20Trip%2FAudit)-success.svg)](docs/testing/TEST_REPORT.md)
 
-> **Dự án Môn học:** Kiến trúc Microservices (MSA) — Trường Đại học Công nghiệp TP.HCM (IUH)  
+> **Dự án Môn học:** Lập trình hướng dịch vụ (MSA) — Trường Đại học Công nghiệp TP.HCM (IUH)  
 > **Sinh viên thực hiện:** Mai Quốc Hưng  
 > **Mã số sinh viên (MSSV):** 23732061  
 
