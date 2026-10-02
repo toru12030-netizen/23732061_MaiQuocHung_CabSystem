@@ -49,3 +49,19 @@ SELECT 'CREATE DATABASE payment_db OWNER payment_service'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'payment_db')\gexec
 
 GRANT ALL PRIVILEGES ON DATABASE payment_db TO payment_service;
+
+
+-- 1.4 Database & User cho audit-service
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'audit_service') THEN
+        CREATE USER audit_service WITH ENCRYPTED PASSWORD 'audit_pass_cab_2026';
+    END IF;
+END
+$$;
+
+SELECT 'CREATE DATABASE audit_db OWNER audit_service'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'audit_db')\gexec
+
+GRANT ALL PRIVILEGES ON DATABASE audit_db TO audit_service;
+

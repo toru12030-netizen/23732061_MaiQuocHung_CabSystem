@@ -32,7 +32,8 @@ async function initPostgres() {
   const dbs = [
     { name: 'auth_db', user: 'auth_service', pass: 'auth_pass_cab_2026', schema: 'infra/postgres/01-auth_db_schema.sql' },
     { name: 'booking_db', user: 'booking_service', pass: 'booking_pass_cab_2026', schema: 'infra/postgres/02-booking_db_schema.sql' },
-    { name: 'payment_db', user: 'payment_service', pass: 'payment_pass_cab_2026', schema: 'infra/postgres/03-payment_db_schema.sql' }
+    { name: 'payment_db', user: 'payment_service', pass: 'payment_pass_cab_2026', schema: 'infra/postgres/03-payment_db_schema.sql' },
+    { name: 'audit_db', user: 'audit_service', pass: 'audit_pass_cab_2026', schema: 'infra/postgres/04-audit_db_schema.sql' }
   ];
 
   for (const item of dbs) {

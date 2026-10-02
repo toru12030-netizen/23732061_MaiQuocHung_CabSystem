@@ -18,6 +18,8 @@ describe('Infrastructure & Architecture Tests (STT 01 - 05, 07)', () => {
       'apps/payment-service',
       'apps/notification-service',
       'apps/admin-service',
+      'apps/trip-service',
+      'apps/audit-service',
       'packages/shared-config',
       'infra/postgres',
       'infra/mongo'
@@ -101,6 +103,8 @@ describe('Infrastructure & Architecture Tests (STT 01 - 05, 07)', () => {
       'payment-service',
       'notification-service',
       'admin-service',
+      'trip-service',
+      'audit-service',
       'cab-kafka',
       'cab-zookeeper',
       'cab-secure-db'

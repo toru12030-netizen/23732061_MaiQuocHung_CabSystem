@@ -1,0 +1,17 @@
+{
+  "name": "audit-service",
+  "version": "1.0.0",
+  "description": "Centralized compliance logging, security auditing, and event tracking backed by PostgreSQL",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@cab/shared-config": "^1.0.0",
+    "@cab/event-contracts": "^1.0.0",
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "pg": "^8.11.3",
+    "kafkajs": "^2.2.4"
+  }
+}

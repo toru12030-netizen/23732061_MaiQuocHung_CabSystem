@@ -318,6 +318,64 @@ async function seedPostgres() {
   `);
   console.log('✅ payment_db.idempotency_records: Seeded idempotency record for Replay Attack validation (STT 30).');
   await paymentClient.end();
+
+  // 4. audit_db (audit-service - PostgreSQL)
+  console.log('--- Seeding audit_db (PostgreSQL) ---');
+  const auditClient = new Client({
+    host: process.env.PG_HOST || 'localhost',
+    port: parseInt(process.env.PG_PORT || '5432', 10),
+    user: process.env.PG_USER || 'apple',
+    password: process.env.PG_PASSWORD,
+    database: 'audit_db'
+  });
+  await auditClient.connect();
+
+  const centralLogs = [
+    {
+      id: 'aud_seed_001',
+      action: 'APPROVE_DRIVER',
+      resource: 'drivers/DRV_001',
+      actor_id: 'usr_admin_001',
+      actor_role: 'admin',
+      details: { target: 'DRV_001', status: 'APPROVED' },
+      ip_address: '127.0.0.1',
+      status: 'SUCCESS'
+    },
+    {
+      id: 'aud_seed_002',
+      action: 'PAYMENT_CHECKOUT',
+      resource: 'payments/checkout',
+      actor_id: 'usr_cust_001',
+      actor_role: 'customer',
+      details: { rideId: 'ride_demo_001', amount: 85000 },
+      ip_address: '127.0.0.1',
+      status: 'SUCCESS'
+    }
+  ];
+
+  for (const cl of centralLogs) {
+    await auditClient.query(`
+      INSERT INTO audit_logs (id, actor_id, actor_role, action, resource, ip_address, status, details, timestamp)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW())
+      ON CONFLICT (id) DO NOTHING;
+    `, [cl.id, cl.actor_id, cl.actor_role, cl.action, cl.resource, cl.ip_address, cl.status, JSON.stringify(cl.details)]);
+  }
+  console.log(`✅ audit_db.audit_logs: Seeded ${centralLogs.length} audit records into PostgreSQL.`);
+
+  await auditClient.query(`
+    INSERT INTO security_events (id, event_type, severity, source, ip_address, details, timestamp)
+    VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW())
+    ON CONFLICT (id) DO NOTHING;
+  `, [
+    'sec_seed_001',
+    'SQLI_ATTEMPT_BLOCKED',
+    'CRITICAL',
+    'POST /auth/login',
+    '192.168.1.100',
+    JSON.stringify({ payload: "' OR 1=1 --", result: '401_UNAUTHORIZED' })
+  ]);
+  console.log('✅ audit_db.security_events: Seeded security attack event log into PostgreSQL.');
+  await auditClient.end();
 }
 
 async function seedMongo() {
@@ -592,6 +650,62 @@ async function seedMongo() {
     await auditCol.insertOne(l);
   }
   console.log(`✅ admin_db.audit_logs: Seeded ${logs.length} audit logs.`);
+
+  // 5. trip_db (trip-service)
+  console.log('--- Seeding trip_db ---');
+  const tripDb = client.db('trip_db');
+  const tripsCol = tripDb.collection('trips');
+  await tripsCol.deleteMany({});
+  const sampleTrips = [
+    {
+      tripId: 'trip_demo_001',
+      bookingId: 'ride_demo_001',
+      customerId: 'usr_cust_001',
+      driverId: 'DRV_001',
+      vehicleType: 'sedan',
+      status: 'IN_PROGRESS',
+      pickupAddress: '12 Nguyen Van Bao, Go Vap, TP.HCM',
+      pickupLocation: { type: 'Point', coordinates: [106.6868, 10.8221] },
+      dropoffAddress: 'Tan Son Nhat Airport, TP.HCM',
+      dropoffLocation: { type: 'Point', coordinates: [106.6588, 10.8184] },
+      currentLocation: { lat: 10.8210, lng: 106.6800, speed: 35, bearing: 240 },
+      estimatedDistance: 6.2,
+      estimatedDuration: 18,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    {
+      tripId: 'trip_comp_001',
+      bookingId: 'ride_comp_001',
+      customerId: 'usr_cust_001',
+      driverId: 'DRV_001',
+      vehicleType: 'sedan',
+      status: 'COMPLETED',
+      pickupAddress: '12 Nguyen Van Bao, Go Vap',
+      dropoffAddress: 'Tan Son Nhat Airport',
+      currentLocation: { lat: 10.8184, lng: 106.6588 },
+      completedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+  ];
+  for (const t of sampleTrips) {
+    await tripsCol.insertOne(t);
+  }
+  console.log(`✅ trip_db.trips: Seeded ${sampleTrips.length} active/completed trips.`);
+
+  const tripLocCol = tripDb.collection('trip_locations');
+  await tripLocCol.deleteMany({});
+  await tripLocCol.insertOne({
+    tripId: 'trip_demo_001',
+    location: { type: 'Point', coordinates: [106.6868, 10.8221] },
+    lat: 10.8221,
+    lng: 106.6868,
+    speed: 30,
+    bearing: 180,
+    recordedAt: new Date()
+  });
+  console.log('✅ trip_db.trip_locations: Seeded initial GPS tracking breadcrumb.');
 
   await client.close();
 }

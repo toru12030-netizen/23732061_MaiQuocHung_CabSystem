@@ -39,6 +39,11 @@ const TEST_SUITES = [
     name: 'Security & Vulnerability',
     stt: 'STT 24 - 30',
     file: 'tests/security/security.test.js'
+  },
+  {
+    name: 'Trip & Audit Services',
+    stt: 'Trip & Audit',
+    file: 'tests/integration/trip-audit.test.js'
   }
 ];
 

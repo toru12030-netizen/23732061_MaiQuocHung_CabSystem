@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-10-01T12:56:09.523Z",
+  "timestamp": "2026-10-02T09:36:12.225Z",
   "candidate": "Mai Quoc Hung - 23732061",
-  "totalSuites": 6,
-  "passedSuites": 6,
+  "totalSuites": 7,
+  "passedSuites": 7,
   "failedSuites": 0,
   "status": "ALL_PASSED",
   "suites": [
@@ -11,42 +11,49 @@
       "stt": "STT 01 - 05, 07",
       "file": "tests/infrastructure/infrastructure.test.js",
       "passed": true,
-      "durationMs": 469
+      "durationMs": 417
     },
     {
       "name": "Smoke Health & Gateway",
       "stt": "STT 06, 08",
       "file": "tests/smoke/smoke.test.js",
       "passed": true,
-      "durationMs": 260
+      "durationMs": 205
     },
     {
       "name": "Authentication & Query",
       "stt": "STT 09 - 14",
       "file": "tests/integration/auth-query.test.js",
       "passed": true,
-      "durationMs": 591
+      "durationMs": 555
     },
     {
       "name": "E2E Booking & Ride Lifecycle",
       "stt": "STT 15 - 20",
       "file": "tests/e2e/booking-flow.test.js",
       "passed": true,
-      "durationMs": 336
+      "durationMs": 304
     },
     {
       "name": "Driver Registration & Admin Approval",
       "stt": "STT 21 - 23",
       "file": "tests/integration/driver-admin.test.js",
       "passed": true,
-      "durationMs": 259
+      "durationMs": 243
     },
     {
       "name": "Security & Vulnerability",
       "stt": "STT 24 - 30",
       "file": "tests/security/security.test.js",
       "passed": true,
-      "durationMs": 384
+      "durationMs": 372
+    },
+    {
+      "name": "Trip & Audit Services",
+      "stt": "Trip & Audit",
+      "file": "tests/integration/trip-audit.test.js",
+      "passed": true,
+      "durationMs": 387
     }
   ]
 }

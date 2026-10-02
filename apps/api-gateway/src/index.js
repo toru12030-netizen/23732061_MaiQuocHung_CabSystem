@@ -14,6 +14,8 @@ const driverRoutes = require('./routes/driverRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const tripRoutes = require('./routes/tripRoutes');
+const auditRoutes = require('./routes/auditRoutes');
 
 const app = express();
 
@@ -77,6 +79,16 @@ app.use(`${base}/pricing`, paymentRoutes);
 // --- 4.7 Admin Service (RBAC Protected: STT 22) ---
 app.use('/admin', adminRoutes);
 app.use(`${base}/admin`, adminRoutes);
+
+// --- 4.8 Trip Service (Trip execution & real-time tracking) ---
+app.use('/trips', tripRoutes);
+app.use(`${base}/trips`, tripRoutes);
+
+// --- 4.9 Audit Service (Audit logs & Security compliance) ---
+app.use('/audit', auditRoutes);
+app.use(`${base}/audit`, auditRoutes);
+app.use('/admin/audit-logs', auditRoutes);
+app.use(`${base}/admin/audit-logs`, auditRoutes);
 
 // 5. 404 Handler
 app.use((req, res) => {

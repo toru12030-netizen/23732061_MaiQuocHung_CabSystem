@@ -82,6 +82,8 @@ services:
       - PAYMENT_SERVICE_URL=http://payment-service:3004
       - NOTIFICATION_SERVICE_URL=http://notification-service:3005
       - ADMIN_SERVICE_URL=http://admin-service:3006
+      - TRIP_SERVICE_URL=http://trip-service:3008
+      - AUDIT_SERVICE_URL=http://audit-service:3009
     networks:
       - cab-internal-net
     depends_on:
@@ -92,6 +94,8 @@ services:
       - payment-service
       - notification-service
       - admin-service
+      - trip-service
+      - audit-service
 
   customer-service:
     build:
@@ -230,6 +234,48 @@ services:
       - NODE_ENV=development
       - PORT=3006
       - MONGODB_URI=mongodb://host.docker.internal:27017/admin_db
+      - KAFKA_BROKERS=cab-kafka:9092
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - cab-internal-net
+    depends_on:
+      cab-kafka:
+        condition: service_healthy
+
+  trip-service:
+    build:
+      context: .
+      dockerfile: apps/trip-service/Dockerfile
+    container_name: cab-trip-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=3008
+      - MONGODB_URI=mongodb://host.docker.internal:27017/trip_db
+      - KAFKA_BROKERS=cab-kafka:9092
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - cab-internal-net
+    depends_on:
+      cab-kafka:
+        condition: service_healthy
+
+  audit-service:
+    build:
+      context: .
+      dockerfile: apps/audit-service/Dockerfile
+    container_name: cab-audit-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=3009
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_NAME=audit_db
+      - DB_USER=audit_service
+      - DB_PASSWORD=audit_pass_cab_2026
       - KAFKA_BROKERS=cab-kafka:9092
     extra_hosts:
       - "host.docker.internal:host-gateway"

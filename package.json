@@ -21,6 +21,8 @@
     "start:payment": "npm --workspace=apps/payment-service start",
     "start:notification": "npm --workspace=apps/notification-service start",
     "start:admin": "npm --workspace=apps/admin-service start",
+    "start:trip": "npm --workspace=apps/trip-service start",
+    "start:audit": "npm --workspace=apps/audit-service start",
     "test": "node tests/helpers/run-all-tests.js",
     "test:infrastructure": "node --test tests/infrastructure/*.test.js",
     "test:smoke": "node --test tests/smoke/*.test.js",

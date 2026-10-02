@@ -20,7 +20,9 @@ router.put('/drivers/:id/approval', authenticateJWT, requireRoles('admin'), (req
   return driverProxy(req, res, next);
 });
 
-// Audit logs
-router.get(['/audit-logs', '/logs'], authenticateJWT, requireRoles('admin'), adminProxy);
+const auditProxy = createProxyHandler(config.services.audit);
+
+// Audit logs (chuyển tiếp tới audit-service)
+router.get(['/audit-logs', '/logs'], authenticateJWT, requireRoles('admin'), auditProxy);
 
 module.exports = router;
