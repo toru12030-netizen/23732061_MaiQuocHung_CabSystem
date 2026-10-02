@@ -1,0 +1,44 @@
+{
+  "name": "cab-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CAB System - Microservices platform for ride hailing (IUH MSA Project)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "start": "docker compose up -d",
+    "stop": "docker compose down",
+    "restart": "docker compose restart",
+    "status": "docker compose ps",
+    "logs": "docker compose logs -f",
+    "seed": "node scripts/seed-data.js",
+    "start:gateway": "npm --workspace=apps/api-gateway start",
+    "start:auth": "npm --workspace=apps/auth-service start",
+    "start:driver": "npm --workspace=apps/driver-service start",
+    "start:booking": "npm --workspace=apps/booking-service start",
+    "start:payment": "npm --workspace=apps/payment-service start",
+    "start:notification": "npm --workspace=apps/notification-service start",
+    "start:admin": "npm --workspace=apps/admin-service start",
+    "test": "node tests/helpers/run-all-tests.js",
+    "test:infrastructure": "node --test tests/infrastructure/*.test.js",
+    "test:smoke": "node --test tests/smoke/*.test.js",
+    "test:integration": "node --test tests/integration/*.test.js",
+    "test:e2e": "node --test tests/e2e/*.test.js",
+    "test:security": "node --test tests/security/*.test.js",
+    "test:ci": "node tests/helpers/run-all-tests.js"
+  },
+  "keywords": [
+    "microservices",
+    "cab-system",
+    "iuh",
+    "msa"
+  ],
+  "author": "Mai Quoc Hung - 23732061",
+  "license": "ISC",
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/proto-loader": "^0.8.1"
+  }
+}

@@ -1,0 +1,122 @@
+name: CAB System - Microservices CI Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  test-and-validate:
+    name: Build, Spin Up, Seed & Test 30 Criteria
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_password_2026
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })' --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 3. Install Root & Workspace Dependencies
+        run: npm install
+
+      - name: 4. Initialize CI PostgreSQL Databases & Schemas
+        env:
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_ADMIN_USER: postgres
+          PG_ADMIN_PASSWORD: postgres_ci_password_2026
+        run: node scripts/init-ci-databases.js
+
+      - name: 5. Start Docker Compose Microservices
+        run: |
+          docker compose up -d --build
+          docker compose ps
+
+      - name: 6. Wait for API Gateway & Microservices Readiness
+        run: |
+          echo "Waiting for API Gateway to be healthy on port 3000..."
+          timeout=90
+          elapsed=0
+          until curl -s -f http://localhost:3000/api/v1/ready > /dev/null; do
+            sleep 2
+            elapsed=$((elapsed + 2))
+            if [ $elapsed -ge $timeout ]; then
+              echo "Timeout waiting for API Gateway /ready endpoint!"
+              docker compose logs api-gateway
+              exit 1
+            fi
+            echo "Waiting... (${elapsed}s elapsed)"
+          done
+          echo "API Gateway is READY!"
+          curl -s http://localhost:3000/api/v1/health | jq .
+          curl -s http://localhost:3000/api/v1/health/services | jq .
+
+      - name: 7. Seed Test Baseline Data
+        env:
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_USER: postgres
+          PG_PASSWORD: postgres_ci_password_2026
+          MONGODB_URI: mongodb://localhost:27017
+        run: npm run seed
+
+      - name: 8. Execute Automated Test Suites (STT 01 - STT 30)
+        env:
+          API_GATEWAY_URL: http://localhost:3000/api/v1
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_USER: postgres
+          PG_PASSWORD: postgres_ci_password_2026
+        run: npm test
+
+      - name: 9. Collect Docker Logs on Failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Container Status ==="
+          docker compose ps -a
+          echo "=== All Services Logs ==="
+          docker compose logs --tail=100
+
+      - name: 10. Upload Test Summary Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-summary
+          path: test-results/
+          retention-days: 7
+
+      - name: 11. Cleanup Docker Containers
+        if: always()
+        run: docker compose down -v

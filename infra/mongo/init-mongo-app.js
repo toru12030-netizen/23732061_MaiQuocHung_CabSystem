@@ -1,5 +1,5 @@
 // Initialize cab-app-db databases and collections
-const appDbs = ['driver_db', 'notification_db', 'admin_db'];
+const appDbs = ['driver_db', 'customer_db', 'notification_db', 'admin_db'];
 
 for (const dbName of appDbs) {
   const targetDb = db.getSiblingDB(dbName);
@@ -7,6 +7,11 @@ for (const dbName of appDbs) {
   targetDb.createCollection('_init_placeholder');
   targetDb._init_placeholder.drop();
 }
+
+// customer_db setup
+const customerDb = db.getSiblingDB('customer_db');
+customerDb.createCollection('customers');
+customerDb.customers.createIndex({ uid: 1 }, { unique: true });
 
 // driver_db setup
 const driverDb = db.getSiblingDB('driver_db');

@@ -1,0 +1,36 @@
+{
+  "accounts": {
+    "customer": {
+      "username": "customer1",
+      "password": "Password123@",
+      "uid": "usr_cust_001"
+    },
+    "admin": {
+      "username": "admin_hung",
+      "password": "Password123@",
+      "uid": "usr_admin_001"
+    },
+    "driver": {
+      "username": "driver_tuan",
+      "password": "Password123@",
+      "id": "DRV_001"
+    }
+  },
+  "locations": {
+    "iuh": {
+      "address": "12 Nguyễn Văn Bảo, Phường 4, Gò Vấp, TP.HCM",
+      "lat": 10.8221,
+      "lng": 106.6868
+    },
+    "airport": {
+      "address": "Sân bay Quốc tế Tân Sơn Nhất, Tân Bình, TP.HCM",
+      "lat": 10.8184,
+      "lng": 106.6588
+    }
+  },
+  "security": {
+    "sqli_payload": "' OR 1=1 --",
+    "xss_payload": "<script>alert('hack')</script>",
+    "tampered_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbl8wMDEiLCJyb2xlIjoiYWRtaW4ifQ.TAMPERED_FAKE_SIGNATURE_CAB_SYSTEM_2026"
+  }
+}

@@ -5,8 +5,13 @@ const bcrypt = require('bcryptjs');
 const ROLES = {
   CUSTOMER: 'CUSTOMER',
   DRIVER: 'DRIVER',
-  ADMIN: 'ADMIN'
+  ADMIN: 'admin',
+  MEMBER: 'member',
+  admin: 'admin',
+  member: 'member'
 };
+
+const { loadProto, grpc } = require('./grpcLoader');
 
 // Ride Lifecycle Statuses
 const RIDE_STATUS = {
@@ -35,7 +40,23 @@ const APPROVAL_STATUS = {
 };
 
 // Response Helpers matching OpenAPI Specification
-function sendSuccess(res, data, statusCode = 200, message = 'Success') {
+function sendSuccess(res, arg2, arg3 = 200, arg4 = 'Success') {
+  let statusCode = 200;
+  let message = 'Success';
+  let data = null;
+
+  if (typeof arg2 === 'number') {
+    // Called as: sendSuccess(res, statusCode, message, data)
+    statusCode = arg2;
+    message = typeof arg3 === 'string' ? arg3 : 'Success';
+    data = (arg4 !== 'Success' && arg4 !== undefined) ? arg4 : (typeof arg3 === 'object' ? arg3 : null);
+  } else {
+    // Called as: sendSuccess(res, data, statusCode, message)
+    data = arg2;
+    if (typeof arg3 === 'number') statusCode = arg3;
+    if (typeof arg4 === 'string') message = arg4;
+  }
+
   return res.status(statusCode).json({
     success: true,
     message,
@@ -132,5 +153,7 @@ module.exports = {
   hashPassword,
   comparePassword,
   sanitizeInput,
-  formatLog
+  formatLog,
+  loadProto,
+  grpc
 };

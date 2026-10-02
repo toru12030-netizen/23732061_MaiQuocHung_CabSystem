@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-10-01T12:56:09.523Z",
+  "candidate": "Mai Quoc Hung - 23732061",
+  "totalSuites": 6,
+  "passedSuites": 6,
+  "failedSuites": 0,
+  "status": "ALL_PASSED",
+  "suites": [
+    {
+      "name": "Infrastructure & Architecture",
+      "stt": "STT 01 - 05, 07",
+      "file": "tests/infrastructure/infrastructure.test.js",
+      "passed": true,
+      "durationMs": 469
+    },
+    {
+      "name": "Smoke Health & Gateway",
+      "stt": "STT 06, 08",
+      "file": "tests/smoke/smoke.test.js",
+      "passed": true,
+      "durationMs": 260
+    },
+    {
+      "name": "Authentication & Query",
+      "stt": "STT 09 - 14",
+      "file": "tests/integration/auth-query.test.js",
+      "passed": true,
+      "durationMs": 591
+    },
+    {
+      "name": "E2E Booking & Ride Lifecycle",
+      "stt": "STT 15 - 20",
+      "file": "tests/e2e/booking-flow.test.js",
+      "passed": true,
+      "durationMs": 336
+    },
+    {
+      "name": "Driver Registration & Admin Approval",
+      "stt": "STT 21 - 23",
+      "file": "tests/integration/driver-admin.test.js",
+      "passed": true,
+      "durationMs": 259
+    },
+    {
+      "name": "Security & Vulnerability",
+      "stt": "STT 24 - 30",
+      "file": "tests/security/security.test.js",
+      "passed": true,
+      "durationMs": 384
+    }
+  ]
+}
