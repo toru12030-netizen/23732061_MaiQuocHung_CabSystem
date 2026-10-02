@@ -16,9 +16,10 @@ Thư mục tập trung toàn bộ tài liệu đặc tả, thiết kế kiến t
 ---
 
 ## 3. Cẩm nang & Báo cáo Kiểm thử (`docs/testing/`)
-- [CAB_Test_Cases.xlsx](testing/CAB_Test_Cases.xlsx): Bảng ma trận kiểm thử chi tiết (Test Case Matrix) tương ứng với từng ca kiểm thử.
+- [DU_LIEU_TEST_MAU_THEO_TIEU_CHI.md](testing/DU_LIEU_TEST_MAU_THEO_TIEU_CHI.md): **Bộ dữ liệu mẫu gõ tay trực tiếp theo từng tiêu chí (STT 01 - 30)** dành cho kiểm thử thủ công trên Postman mà không cần import file collection.
 - [HUONG_DAN_TEST_THU_CONG.md](testing/HUONG_DAN_TEST_THU_CONG.md): Hướng dẫn từng bước thực hiện kiểm thử thủ công qua Postman (đầy đủ các bước đăng nhập, cấp token, đặt xe, thanh toán).
 - [DANH_SACH_API_TEST.md](testing/DANH_SACH_API_TEST.md): Danh mục các endpoint, headers và body payload chuẩn để import vào Postman hoặc cURL.
+- [CAB_Test_Cases.xlsx](testing/CAB_Test_Cases.xlsx): Bảng ma trận kiểm thử chi tiết (Test Case Matrix) tương ứng với từng ca kiểm thử.
 - [TEST_REPORT.md](testing/TEST_REPORT.md): Báo cáo chi tiết kết quả chạy kiểm thử tự động (Automated Test Execution Report) đạt 100% tỷ lệ vượt qua (Pass).
 
 ---

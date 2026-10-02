@@ -215,6 +215,7 @@ Hệ thống bao gồm **10 Microservices nghiệp vụ** và **3 dịch vụ h�
 │   │   ├── srs.md                 # Đặc tả yêu cầu phần mềm v3.0
 │   │   └── phieucham.md           # 30 tiêu chí đánh giá môn học
 │   └── testing/
+│       ├── DU_LIEU_TEST_MAU_THEO_TIEU_CHI.md # Dữ liệu mẫu gõ tay Postman theo từng tiêu chí
 │       ├── CAB_Test_Cases.xlsx    # Bảng test cases chi tiết
 │       ├── HUONG_DAN_TEST_THU_CONG.md # Hướng dẫn test Postman thủ công từng bước
 │       ├── DANH_SACH_API_TEST.md  # Danh sách API và payload mẫu test Postman
