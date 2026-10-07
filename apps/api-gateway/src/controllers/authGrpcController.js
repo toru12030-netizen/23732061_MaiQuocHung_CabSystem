@@ -1,4 +1,4 @@
-const { authClient, mapGrpcErrorToHttp } = require('../grpc/grpcClients');
+const { authClient, customerClient, mapGrpcErrorToHttp } = require('../grpc/grpcClients');
 const { sendSuccess, sendError } = require('@cab/shared-config');
 
 /**
@@ -6,12 +6,28 @@ const { sendSuccess, sendError } = require('@cab/shared-config');
  * Chuyển đổi thành gRPC call: AuthService.Register
  */
 function register(req, res) {
-  const { username, password, role } = req.body;
+  const { username, password, role, fullname, age, address } = req.body;
 
   authClient.Register({ username, password, role }, (err, response) => {
     if (err) {
       return mapGrpcErrorToHttp(err, res);
     }
+
+    // Tự động khởi tạo hồ sơ Customer trong customer-service (MongoDB customer_db)
+    const assignedRole = role || (response && response.role) || 'member';
+    if (response && response.uid && assignedRole === 'member') {
+      customerClient.CreateCustomer({
+        uid: response.uid,
+        fullname: fullname || username || '',
+        age: Number(age) || 0,
+        address: address || ''
+      }, (custErr) => {
+        if (custErr) {
+          console.warn('[GATEWAY] Notice auto-creating customer in MongoDB:', custErr.message);
+        }
+      });
+    }
+
     return sendSuccess(res, response, 201, 'User registered successfully');
   });
 }

@@ -66,7 +66,26 @@ async function getCustomer(call, callback) {
       });
     }
 
-    const customer = await col.findOne({ uid }, { projection: { _id: 0 } });
+    let customer = await col.findOne({ uid }, { projection: { _id: 0 } });
+    if (!customer) {
+      // Tự động khởi tạo hồ sơ mặc định trong MongoDB cho khách hàng mới
+      const now = new Date().toISOString();
+      const defaultDoc = {
+        uid,
+        fullname: '',
+        age: 0,
+        address: '',
+        createdAt: now,
+        updatedAt: now
+      };
+      try {
+        await col.insertOne(defaultDoc);
+        customer = defaultDoc;
+      } catch (err) {
+        customer = await col.findOne({ uid }, { projection: { _id: 0 } });
+      }
+    }
+
     if (!customer) {
       return callback({
         code: grpc.status.NOT_FOUND,

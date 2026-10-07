@@ -4,9 +4,8 @@ const AuditController = require('../controllers/auditController');
 const { validateLogInput, validateSecurityEvent } = require('../middlewares/auditValidator');
 
 // Audit logs
-router.post('/logs', validateLogInput, AuditController.logAction);
-router.get('/logs', AuditController.listAuditLogs);
-router.get('/admin/audit-logs', AuditController.listAuditLogs);
+router.post(['/logs', '/audit-logs'], validateLogInput, AuditController.logAction);
+router.get(['/logs', '/audit-logs', '/admin/audit-logs'], AuditController.listAuditLogs);
 
 // Security events (SQLi, XSS, JWT tampering tracking)
 router.post('/security-events', validateSecurityEvent, AuditController.recordSecurityEvent);
